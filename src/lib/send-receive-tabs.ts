@@ -6,13 +6,19 @@ export type SendReceiveTab = {
   roles: UserRole[];
 };
 
-// In transit (4.8) and Receive (4.10) get added here as they're built —
-// dispatching is a store-management action, so Send out stays scoped to
-// admin/branch_manager/store_manager (the roles with requisitions:approve).
+// Receive (4.10) gets added here once it's built — dispatching and
+// watching transit are store-management actions, so both tabs below
+// stay scoped to admin/branch_manager/store_manager (the roles with
+// requisitions:approve).
 export const SEND_RECEIVE_TABS: SendReceiveTab[] = [
   {
     label: "Send out",
     href: "/send-receive",
+    roles: ["admin", "branch_manager", "store_manager"],
+  },
+  {
+    label: "In transit",
+    href: "/send-receive/in-transit",
     roles: ["admin", "branch_manager", "store_manager"],
   },
 ];
