@@ -17,6 +17,11 @@ export const BUY_TABS: BuyTab[] = [
     href: "/buy/orders",
     roles: ["admin", "branch_manager", "purchase_manager"],
   },
+  {
+    label: "Purchase history",
+    href: "/buy/history",
+    roles: ["admin", "purchase_manager"],
+  },
 ];
 
 export function canAccessBuyTab(role: UserRole, href: string): boolean {

@@ -15,6 +15,7 @@ export type Permission =
   | "recipes:read"
   | "requisitions:approve"
   | "purchase:manage"
+  | "purchase:history"
   | "setup:manage";
 
 // admin = "Everything, all branches" (CLAUDE.md) — no exceptions, so it
@@ -41,6 +42,7 @@ const ROLE_PERMISSIONS: Record<Exclude<UserRole, "admin">, Permission[]> = {
     "nav:send-receive",
     "nav:buy",
     "purchase:manage",
+    "purchase:history",
   ],
   hod: ["nav:home", "nav:requisitions", "nav:send-receive", "nav:stock"],
   senior_mixer: ["nav:home", "nav:mix", "nav:recipes", "recipes:read"],
