@@ -23,9 +23,13 @@ function loadEnvLocal() {
 }
 
 const env = loadEnvLocal();
-const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const admin = createClient(
+  env.NEXT_PUBLIC_SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: { autoRefreshToken: false, persistSession: false },
+  },
+);
 
 const failures = [];
 function assertTrue(label, condition) {
@@ -78,7 +82,9 @@ async function main() {
     isSequential(reqResults, "REQ"),
   );
 
-  console.log(`Firing ${CONCURRENCY} concurrent TRF calls for Guwahati (same branch, different type)...`);
+  console.log(
+    `Firing ${CONCURRENCY} concurrent TRF calls for Guwahati (same branch, different type)...`,
+  );
   const trfResults = await Promise.all(
     Array.from({ length: CONCURRENCY }, () => nextDocNo("TRF", guwahati.id)),
   );
@@ -91,7 +97,9 @@ async function main() {
     new Set(trfResults).size === CONCURRENCY,
   );
 
-  console.log(`Firing ${CONCURRENCY} concurrent REQ calls for Kolkata (different branch, same type)...`);
+  console.log(
+    `Firing ${CONCURRENCY} concurrent REQ calls for Kolkata (different branch, same type)...`,
+  );
   const kolkataResults = await Promise.all(
     Array.from({ length: CONCURRENCY }, () => nextDocNo("REQ", kolkata.id)),
   );
@@ -104,7 +112,9 @@ async function main() {
     new Set(kolkataResults).size === CONCURRENCY,
   );
 
-  console.log(`\n${failures.length === 0 ? "ALL PASSED" : `${failures.length} FAILED`}`);
+  console.log(
+    `\n${failures.length === 0 ? "ALL PASSED" : `${failures.length} FAILED`}`,
+  );
   if (failures.length > 0) {
     console.log(failures.map((f) => ` - ${f}`).join("\n"));
     process.exit(1);
