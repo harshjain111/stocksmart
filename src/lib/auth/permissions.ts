@@ -27,6 +27,7 @@ const ROLE_PERMISSIONS: Record<Exclude<UserRole, "admin">, Permission[]> = {
     "nav:buy",
     "nav:stock",
     "requisitions:approve",
+    "purchase:manage",
   ],
   store_manager: [
     "nav:home",
