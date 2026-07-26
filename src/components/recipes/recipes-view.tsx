@@ -1,14 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Pencil } from "lucide-react";
 import { getVersionDetail } from "@/app/(app)/recipes/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusTag } from "@/components/shared/status-tag";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { NewVersionDialog } from "@/components/recipes/new-version-dialog";
 
 type Flavour = {
   id: string;
@@ -27,19 +29,26 @@ type VersionSummary = {
   batchCount: number;
 };
 
+type Material = { id: string; name: string };
+
 type VersionDetail = {
   note: string;
   createdAt: string;
   createdByName: string;
-  lines: { materialName: string; percentage: number }[];
+  wastagePct: number;
+  lines: { rawMaterialId: string; materialName: string; percentage: number }[];
 };
 
 export function RecipesView({
   flavours,
   versions,
+  materials,
+  canCreateVersion,
 }: {
   flavours: Flavour[];
   versions: VersionSummary[];
+  materials: Material[];
+  canCreateVersion: boolean;
 }) {
   const [selectedFlavourId, setSelectedFlavourId] = React.useState<
     string | null
@@ -49,10 +58,14 @@ export function RecipesView({
   >(null);
   const [detail, setDetail] = React.useState<VersionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = React.useState(false);
+  const [newVersionOpen, setNewVersionOpen] = React.useState(false);
 
   const flavourVersions = versions
     .filter((v) => v.flavour_id === selectedFlavourId)
     .sort((a, b) => b.version_no - a.version_no);
+
+  const nextVersionNo = (flavourVersions[0]?.version_no ?? 0) + 1;
+  const selectedFlavour = flavours.find((f) => f.id === selectedFlavourId);
 
   async function selectVersion(versionId: string) {
     setSelectedVersionId(versionId);
@@ -86,7 +99,7 @@ export function RecipesView({
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
         title="Recipes"
-        description="Read-only. Versions are frozen the moment they're saved — there is no edit path."
+        description="Versions are frozen the moment they're saved — there is no edit path, only a new version."
       />
 
       <div className="grid gap-4 md:grid-cols-[220px_1fr]">
@@ -114,91 +127,131 @@ export function RecipesView({
         </Card>
 
         <div className="grid gap-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              {flavourVersions.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => selectVersion(v.id)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                    v.id === selectedVersionId
+                      ? "border-primary bg-primary/10"
+                      : "hover:bg-muted",
+                  )}
+                >
+                  <span className="font-qty font-medium">v{v.version_no}</span>
+                  <StatusTag status={v.status} />
+                  <span className="text-muted-foreground text-xs">
+                    {v.batchCount} batch{v.batchCount === 1 ? "" : "es"}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {canCreateVersion && selectedFlavour && (
+              <Button
+                size="sm"
+                onClick={() => setNewVersionOpen(true)}
+                disabled={materials.length === 0}
+                title={
+                  materials.length === 0
+                    ? "Add a raw material first"
+                    : undefined
+                }
+              >
+                <Pencil /> Change → v{nextVersionNo}
+              </Button>
+            )}
+          </div>
+
           {flavourVersions.length === 0 ? (
             <EmptyState
               icon={FlaskConical}
               title="No recipe yet"
-              description="This flavour has no recipe versions yet. Build the first one from here once the new-version flow lands."
+              description={
+                canCreateVersion
+                  ? "This flavour has no recipe yet — use Change → v1 above to give it one."
+                  : "This flavour has no recipe versions yet."
+              }
             />
           ) : (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {flavourVersions.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => selectVersion(v.id)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
-                      v.id === selectedVersionId
-                        ? "border-primary bg-primary/10"
-                        : "hover:bg-muted",
-                    )}
-                  >
-                    <span className="font-qty font-medium">
-                      v{v.version_no}
-                    </span>
-                    <StatusTag status={v.status} />
-                    <span className="text-muted-foreground text-xs">
-                      {v.batchCount} batch{v.batchCount === 1 ? "" : "es"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {selectedVersionId && (
-                <Card>
-                  <CardContent className="grid gap-4">
-                    {loadingDetail ? (
+            selectedVersionId && (
+              <Card>
+                <CardContent className="grid gap-4">
+                  {loadingDetail ? (
+                    <div className="grid gap-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-2/3" />
+                    </div>
+                  ) : detail ? (
+                    <>
                       <div className="grid gap-2">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-2/3" />
-                      </div>
-                    ) : detail ? (
-                      <>
-                        <div className="grid gap-2">
-                          {detail.lines.map((line) => (
-                            <div key={line.materialName} className="grid gap-1">
-                              <div className="flex items-baseline justify-between text-sm">
-                                <span>{line.materialName}</span>
-                                <span className="font-qty">
-                                  {line.percentage}%
-                                </span>
-                              </div>
-                              <div className="bg-muted h-2 overflow-hidden rounded-full">
-                                <div
-                                  className="bg-primary h-full rounded-full"
-                                  style={{ width: `${line.percentage}%` }}
-                                />
-                              </div>
+                        {detail.lines.map((line) => (
+                          <div key={line.materialName} className="grid gap-1">
+                            <div className="flex items-baseline justify-between text-sm">
+                              <span>{line.materialName}</span>
+                              <span className="font-qty">
+                                {line.percentage}%
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                        <div className="border-t pt-3 text-sm">
-                          <p className="text-muted-foreground">
-                            &ldquo;{detail.note}&rdquo;
-                          </p>
-                          <p className="text-muted-foreground mt-1 text-xs">
-                            {detail.createdByName} ·{" "}
-                            {new Date(detail.createdAt).toLocaleDateString(
-                              "en-IN",
-                            )}
-                          </p>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-destructive text-sm">
-                        Couldn&apos;t load this version.
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </>
+                            <div className="bg-muted h-2 overflow-hidden rounded-full">
+                              <div
+                                className="bg-primary h-full rounded-full"
+                                style={{ width: `${line.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t pt-3 text-sm">
+                        <p className="text-muted-foreground">
+                          &ldquo;{detail.note}&rdquo;
+                        </p>
+                        <p className="text-muted-foreground mt-1 text-xs">
+                          {detail.createdByName} ·{" "}
+                          {new Date(detail.createdAt).toLocaleDateString(
+                            "en-IN",
+                          )}{" "}
+                          · {detail.wastagePct}% wastage
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-destructive text-sm">
+                      Couldn&apos;t load this version.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )
           )}
         </div>
       </div>
+
+      {canCreateVersion && selectedFlavour && (
+        <NewVersionDialog
+          // Remount with fresh initial state whenever the selected
+          // flavour/version changes — the dialog's fields are seeded once
+          // from props via useState, so without this key a later selection
+          // change wouldn't refresh a still-mounted dialog's prefill.
+          key={`${selectedFlavour.id}-${selectedVersionId ?? "none"}`}
+          open={newVersionOpen}
+          onOpenChange={setNewVersionOpen}
+          flavourId={selectedFlavour.id}
+          flavourName={selectedFlavour.name}
+          nextVersionNo={nextVersionNo}
+          materials={materials}
+          prefillWastagePct={detail?.wastagePct ?? 2}
+          prefillLines={
+            detail?.lines.map((l) => ({
+              rawMaterialId: l.rawMaterialId,
+              percentage: l.percentage,
+            })) ?? []
+          }
+        />
+      )}
     </div>
   );
 }
