@@ -69,6 +69,24 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   );
 }
 
+// KNOWN ISSUE: in this Base UI version, TabsPanel's unmount relies on
+// detecting a CSS transition/animation completing on the panel element.
+// With no transition defined (the default here), that completion event
+// never fires, so a panel that's been shown once never re-hides — every
+// panel you've visited stays rendered and visible at the same time.
+// Confirmed via DOM inspection (`element.hidden` stays `false` on the
+// inactive panel after switching tabs), not just a visual glitch.
+//
+// Don't use TabsContent for screens with more than one panel until this
+// is fixed upstream. Instead drive the active panel with plain state and
+// conditional rendering, using Tabs/TabsList/TabsTrigger only for the tab
+// bar UI:
+//   const [tab, setTab] = useState("a");
+//   <Tabs value={tab} onValueChange={(v) => setTab(v)}>
+//     <TabsList><TabsTrigger value="a">A</TabsTrigger>...</TabsList>
+//   </Tabs>
+//   {tab === "a" ? <PanelA /> : <PanelB />}
+// See src/components/setup/materials-flavours-tabs.tsx for a working example.
 function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
