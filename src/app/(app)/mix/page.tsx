@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MakeBatchView } from "@/components/mix/make-batch-view";
+import { MixerBatchQueueView } from "@/components/mix/mixer-batch-queue-view";
 
 type DepartmentRow = {
   id: string;
@@ -9,13 +10,16 @@ type DepartmentRow = {
   branches: { name: string } | null;
 };
 
-// Mixer isn't included yet — masked mode lands in 2.9, so for now this
-// screen (and its actions) is admin + senior_mixer only, same gate as
-// requireMixAccess() in mix/actions.ts.
 export default async function MixPage() {
   const session = await getSession();
-  if (!session || !["admin", "senior_mixer"].includes(session.role)) {
+  if (!session || !["admin", "senior_mixer", "mixer"].includes(session.role)) {
     redirect("/");
+  }
+
+  // A mixer never sees the create-a-batch form — they only work an
+  // already-drafted batch, masked (rule 8). Entirely separate view.
+  if (session.role === "mixer") {
+    return <MixerBatchQueueView />;
   }
 
   const admin = createAdminClient();

@@ -9,6 +9,10 @@ import {
   createDraftBatchSchema,
   type CreateDraftBatchInput,
 } from "@/lib/validation/batches";
+import {
+  fetchMaskedBatchCard,
+  type MaskedBatchCard,
+} from "@/lib/mix/masked-batch-card";
 
 type ActionResult<T> =
   { success: true; data: T } | { success: false; error: string };
@@ -25,14 +29,20 @@ type VersionForBatch = {
   }[];
 };
 
-// Mixer isn't included yet — masked mode lands in 2.9. Until then, a mixer
-// hitting this screen or its actions gets nothing, same as any other
-// unauthorized role.
+// Picking a flavour/version and drafting a new batch (2.8) stays
+// admin/senior_mixer only — a mixer works an already-drafted batch (2.9),
+// never creates one from scratch.
 async function requireMixAccess() {
   const session = await getSession();
   if (!session || !["admin", "senior_mixer"].includes(session.role)) {
     return null;
   }
+  return session;
+}
+
+async function requireMixerAccess() {
+  const session = await getSession();
+  if (!session || session.role !== "mixer") return null;
   return session;
 }
 
@@ -233,4 +243,62 @@ export async function createDraftBatch(
 
   revalidatePath("/recipes");
   return { success: true, data: { batchNo: batchNoRow } };
+}
+
+type DraftBatchSummary = {
+  id: string;
+  batchNo: string;
+  flavourName: string;
+  outputG: number;
+  createdAt: string;
+};
+
+// Draft batches at the mixer's own branch — there's no formal per-mixer
+// assignment yet, so this is the whole branch's queue rather than a
+// personal one. Only draft batches: once confirmed, a batch is history,
+// not something waiting to be mixed.
+export async function listDraftBatchesForMixer(): Promise<
+  ActionResult<DraftBatchSummary[]>
+> {
+  const session = await requireMixerAccess();
+  if (!session || !session.branchId) {
+    return { success: false, error: "Access required." };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("batches")
+    .select("id, batch_no, output_g, created_at, flavours(name)")
+    .eq("branch_id", session.branchId)
+    .eq("status", "draft")
+    .order("created_at", { ascending: false });
+  if (error) return { success: false, error: error.message };
+
+  return {
+    success: true,
+    data: (data ?? []).map((b) => ({
+      id: b.id,
+      batchNo: b.batch_no,
+      flavourName:
+        (b.flavours as unknown as { name: string } | null)?.name ??
+        "Unknown flavour",
+      outputG: b.output_g,
+      createdAt: b.created_at,
+    })),
+  };
+}
+
+export async function getMaskedBatchCard(
+  batchId: string,
+): Promise<ActionResult<MaskedBatchCard>> {
+  const session = await requireMixerAccess();
+  if (!session || !session.branchId) {
+    return { success: false, error: "Access required." };
+  }
+
+  const parsed = z.uuid().safeParse(batchId);
+  if (!parsed.success) return { success: false, error: "Invalid batch." };
+
+  const admin = createAdminClient();
+  return fetchMaskedBatchCard(admin, parsed.data, session.branchId);
 }
