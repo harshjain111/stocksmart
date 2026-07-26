@@ -48,7 +48,8 @@ export default async function CountDetailPage({
   const { data: lines } = await admin
     .from("stock_count_lines")
     .select("item_type, item_id, system_qty_g, counted_qty_g, reason")
-    .eq("count_id", countId);
+    .eq("count_id", countId)
+    .order("created_at", { ascending: true });
 
   const rawIds = (lines ?? [])
     .filter((l) => l.item_type === "raw")

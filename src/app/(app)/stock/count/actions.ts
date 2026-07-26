@@ -69,7 +69,8 @@ async function loadSheet(countId: string): Promise<CountSheet> {
   const { data: lines } = await admin
     .from("stock_count_lines")
     .select("id, item_type, item_id, system_qty_g, counted_qty_g, reason")
-    .eq("count_id", countId);
+    .eq("count_id", countId)
+    .order("created_at", { ascending: true });
 
   const rawIds = (lines ?? [])
     .filter((l) => l.item_type === "raw")
@@ -327,7 +328,8 @@ export async function submitCount(
   const { data: lines, error: linesError } = await admin
     .from("stock_count_lines")
     .select("system_qty_g, counted_qty_g, reason")
-    .eq("count_id", parsed.data);
+    .eq("count_id", parsed.data)
+    .order("created_at", { ascending: true });
   if (linesError) return { success: false, error: linesError.message };
 
   const missingReason = (lines ?? []).some(
