@@ -380,3 +380,39 @@ export async function confirmBatch(
   revalidatePath("/recipes");
   return { success: true };
 }
+
+// Rating is one of the three fields the 2.7 immutability trigger leaves
+// open even after confirmation (rating/feedback/deviation_note), so this
+// is a plain update through the per-request client — batches_update RLS
+// (admin/branch_manager/senior_mixer, own branch) is the real gate here,
+// not this wrapper.
+export async function rateBatch(
+  batchId: string,
+  rating: number,
+  feedback: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const session = await requireMixAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsedId = z.uuid().safeParse(batchId);
+  if (!parsedId.success) return { success: false, error: "Invalid batch." };
+
+  const parsedRating = z.coerce.number().int().min(1).max(5).safeParse(rating);
+  if (!parsedRating.success) {
+    return { success: false, error: "Rating must be between 1 and 5." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("batches")
+    .update({
+      rating: parsedRating.data,
+      feedback: feedback.trim() || null,
+    })
+    .eq("id", parsedId.data)
+    .eq("status", "confirmed");
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/mix/past-batches");
+  return { success: true };
+}

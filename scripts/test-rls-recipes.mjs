@@ -119,29 +119,35 @@ async function main() {
       }
 
       // Direct-insert attempt, bypassing create_recipe_version() entirely.
+      // version_no is derived from the run so repeat runs never collide with
+      // each other on the (flavour_id, version_no) unique constraint —
+      // recipe_versions can never be deleted (rule 7), so a fixed number
+      // would only succeed once and leave every later run unable to tell
+      // "blocked by RLS" apart from "blocked by a stale leftover row".
+      const probeVersionNo = 900000 + (Date.now() % 100000);
       const { error: insertErr } = await client.from("recipe_versions").insert({
         flavour_id: anyVersion.flavour_id,
-        version_no: 999,
-        note: "RLS insert probe — should never persist",
+        version_no: probeVersionNo,
+        note: "RLS insert probe (test artifact — recipe_versions rows can never be deleted, safe to ignore)",
         status: "current",
       });
 
       if (f.canInsert) {
-        // Admin CAN pass the RLS check, but a version_no of 999 will still
-        // usually collide with the unique/immutability constraints on a
-        // real flavour; what matters here is that RLS itself doesn't block
-        // it, not that the insert succeeds end-to-end. Accept either a
-        // clean success or a non-RLS constraint failure.
+        // Admin CAN pass the RLS check; that's what this asserts, not that
+        // the insert succeeds end-to-end.
         const isRlsError =
           insertErr?.message?.toLowerCase().includes("row-level security") ??
           false;
         assertTrue("admin insert not blocked by RLS", !isRlsError);
+        // Can't delete it (rule 7) — the closest thing to cleanup is
+        // flipping status to archived, the one field that's still mutable,
+        // so it doesn't show up as a phantom "current" version anywhere.
         if (!insertErr) {
           await admin
             .from("recipe_versions")
-            .delete()
+            .update({ status: "archived" })
             .eq("flavour_id", anyVersion.flavour_id)
-            .eq("version_no", 999);
+            .eq("version_no", probeVersionNo);
         }
       } else {
         assertTrue("non-admin direct insert is rejected", insertErr !== null);
