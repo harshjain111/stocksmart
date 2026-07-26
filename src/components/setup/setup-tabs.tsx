@@ -3,18 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-
-const SETUP_TABS = [
-  { label: "Branches & departments", href: "/setup/branches" },
-  { label: "People", href: "/setup/people" },
-];
+import { useSession } from "@/lib/auth/session-context";
+import { SETUP_TABS } from "@/lib/setup-tabs";
 
 export function SetupTabs() {
   const pathname = usePathname();
+  const session = useSession();
+  const visibleTabs = SETUP_TABS.filter((tab) =>
+    tab.roles.includes(session.role),
+  );
 
   return (
     <nav className="flex gap-1 border-b">
-      {SETUP_TABS.map((tab) => {
+      {visibleTabs.map((tab) => {
         const active = pathname.startsWith(tab.href);
         return (
           <Link
