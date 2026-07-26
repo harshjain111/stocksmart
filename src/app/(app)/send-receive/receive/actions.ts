@@ -13,6 +13,7 @@ const RECEIVE_ROLES = [
   "admin",
   "branch_manager",
   "store_manager",
+  "purchase_manager",
   "hod",
 ] as const;
 
@@ -98,6 +99,197 @@ export async function getInboundTransfers(): Promise<
       existingGrnStatus: t.grns[0]?.status ?? null,
     })),
   };
+}
+
+type InboundOrder = {
+  id: string;
+  poNo: string;
+  supplierName: string;
+  shipToDepartmentName: string;
+  lineCount: number;
+  existingGrnId: string | null;
+  existingGrnStatus: string | null;
+};
+
+export async function getInboundOrders(): Promise<ActionResult<InboundOrder[]>> {
+  const session = await requireReceiveAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const admin = createAdminClient();
+  let query = admin
+    .from("purchase_orders")
+    .select(
+      "id, po_no, ship_to_department_id, suppliers(name), departments(name), po_lines(id), grns(id, status)",
+    )
+    .in("status", ["sent", "partially_received"]);
+
+  const departmentIds = scopedToDepartmentIds(session);
+  if (departmentIds) {
+    if (departmentIds.length === 0) return { success: true, data: [] };
+    query = query.in("ship_to_department_id", departmentIds);
+  } else if (session.role !== "admin") {
+    query = query.eq("branch_id", session.branchId ?? "");
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: true });
+  if (error) return { success: false, error: error.message };
+
+  type Row = {
+    id: string;
+    po_no: string;
+    suppliers: { name: string } | null;
+    departments: { name: string } | null;
+    po_lines: { id: string }[];
+    grns: { id: string; status: string }[];
+  };
+
+  return {
+    success: true,
+    data: (data as unknown as Row[]).map((po) => {
+      const draftGrn = po.grns.find((g) => g.status === "draft");
+      return {
+        id: po.id,
+        poNo: po.po_no,
+        supplierName: po.suppliers?.name ?? "Unknown supplier",
+        shipToDepartmentName: po.departments?.name ?? "Unknown department",
+        lineCount: po.po_lines.length,
+        existingGrnId: draftGrn?.id ?? po.grns[0]?.id ?? null,
+        existingGrnStatus: draftGrn?.status ?? po.grns[0]?.status ?? null,
+      };
+    }),
+  };
+}
+
+async function loadOrderForReceive(
+  admin: ReturnType<typeof createAdminClient>,
+  poId: string,
+  session: NonNullable<Awaited<ReturnType<typeof getSession>>>,
+) {
+  const { data: po } = await admin
+    .from("purchase_orders")
+    .select("id, branch_id, supplier_id, ship_to_department_id, status")
+    .eq("id", poId)
+    .single();
+  if (!po) return null;
+
+  const departmentIds = scopedToDepartmentIds(session);
+  if (departmentIds && !departmentIds.includes(po.ship_to_department_id)) {
+    return null;
+  }
+  if (
+    !departmentIds &&
+    session.role !== "admin" &&
+    po.branch_id !== session.branchId
+  ) {
+    return null;
+  }
+  return po;
+}
+
+export async function getOrCreateGrnForOrder(
+  poId: string,
+): Promise<ActionResult<{ grnId: string }>> {
+  const session = await requireReceiveAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsed = z.uuid().safeParse(poId);
+  if (!parsed.success) return { success: false, error: "Invalid order." };
+
+  const admin = createAdminClient();
+  const po = await loadOrderForReceive(admin, parsed.data, session);
+  if (!po) return { success: false, error: "Order not found." };
+  if (!["sent", "partially_received"].includes(po.status)) {
+    return { success: false, error: "This order is not awaiting receipt." };
+  }
+
+  const { data: existingGrn } = await admin
+    .from("grns")
+    .select("id")
+    .eq("purchase_order_id", parsed.data)
+    .eq("status", "draft")
+    .maybeSingle();
+  if (existingGrn) {
+    return { success: true, data: { grnId: existingGrn.id } };
+  }
+
+  const [{ data: poLines }, { data: postedGrnLines }] = await Promise.all([
+    admin
+      .from("po_lines")
+      .select("raw_material_id, qty_g")
+      .eq("purchase_order_id", parsed.data),
+    admin
+      .from("grn_lines")
+      .select("item_id, received_qty_g, damaged_qty_g, grns!inner(purchase_order_id, status)")
+      .eq("grns.purchase_order_id", parsed.data)
+      .eq("grns.status", "posted"),
+  ]);
+  if (!poLines || poLines.length === 0) {
+    return { success: false, error: "This order has no lines." };
+  }
+
+  const receivedByMaterial = new Map<string, number>();
+  for (const l of postedGrnLines ?? []) {
+    const total = (l.received_qty_g ?? 0) + (l.damaged_qty_g ?? 0);
+    receivedByMaterial.set(
+      l.item_id,
+      (receivedByMaterial.get(l.item_id) ?? 0) + total,
+    );
+  }
+
+  const remainingLines = poLines
+    .map((l) => ({
+      rawMaterialId: l.raw_material_id,
+      remainingG: l.qty_g - (receivedByMaterial.get(l.raw_material_id) ?? 0),
+    }))
+    .filter((l) => l.remainingG > 0);
+  if (remainingLines.length === 0) {
+    return { success: false, error: "Everything on this order has already been received." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: grnNoRow, error: grnNoError } = await supabase.rpc(
+    "next_doc_no",
+    { p_doc_type: "GRN", p_branch_id: po.branch_id },
+  );
+  if (grnNoError || !grnNoRow) {
+    return {
+      success: false,
+      error: grnNoError?.message ?? "Could not generate GRN number.",
+    };
+  }
+
+  const { data: grn, error: grnError } = await supabase
+    .from("grns")
+    .insert({
+      grn_no: grnNoRow,
+      branch_id: po.branch_id,
+      department_id: po.ship_to_department_id,
+      source: "vendor",
+      purchase_order_id: parsed.data,
+      created_by: session.userId,
+    })
+    .select("id")
+    .single();
+  if (grnError || !grn) {
+    return {
+      success: false,
+      error: grnError?.message ?? "Could not create GRN.",
+    };
+  }
+
+  const { error: linesError } = await supabase.from("grn_lines").insert(
+    remainingLines.map((l) => ({
+      grn_id: grn.id,
+      item_type: "raw" as const,
+      item_id: l.rawMaterialId,
+      expected_qty_g: l.remainingG,
+    })),
+  );
+  if (linesError) return { success: false, error: linesError.message };
+
+  revalidatePath("/send-receive/receive");
+  return { success: true, data: { grnId: grn.id } };
 }
 
 async function loadTransferForReceive(
@@ -216,16 +408,21 @@ type GrnLine = {
   damagedQtyG: number | null;
   reason: string | null;
   overReceived: boolean;
+  rate: number | null;
 };
 
 type GrnDetail = {
   id: string;
   grnNo: string;
   status: string;
+  source: "internal" | "vendor";
   departmentName: string;
   transferNo: string | null;
   fromDepartmentName: string | null;
   requisitionReqNo: string | null;
+  poNo: string | null;
+  supplierName: string | null;
+  invoicePath: string | null;
   lines: GrnLine[];
 };
 
@@ -242,7 +439,7 @@ export async function getGrnDetail(
   const { data: grn } = await admin
     .from("grns")
     .select(
-      "id, grn_no, status, branch_id, department:department_id(name, id), transfers(transfer_no, from_department:from_department_id(name), requisitions(req_no))",
+      "id, grn_no, status, source, branch_id, invoice_path, department:department_id(name, id), transfers(transfer_no, from_department:from_department_id(name), requisitions(req_no)), purchase_orders(po_no, suppliers(name))",
     )
     .eq("id", parsed.data)
     .single();
@@ -269,11 +466,15 @@ export async function getGrnDetail(
     from_department: { name: string } | null;
     requisitions: { req_no: string } | null;
   } | null;
+  const purchaseOrder = grn.purchase_orders as unknown as {
+    po_no: string;
+    suppliers: { name: string } | null;
+  } | null;
 
   const { data: lines } = await admin
     .from("grn_lines")
     .select(
-      "id, item_type, item_id, expected_qty_g, received_qty_g, damaged_qty_g, reason, over_received",
+      "id, item_type, item_id, expected_qty_g, received_qty_g, damaged_qty_g, reason, over_received, rate",
     )
     .eq("grn_id", parsed.data)
     .order("created_at", { ascending: true });
@@ -305,10 +506,14 @@ export async function getGrnDetail(
       id: grn.id,
       grnNo: grn.grn_no,
       status: grn.status,
+      source: grn.source,
       departmentName: department?.name ?? "Unknown department",
       transferNo: transfer?.transfer_no ?? null,
       fromDepartmentName: transfer?.from_department?.name ?? null,
       requisitionReqNo: transfer?.requisitions?.req_no ?? null,
+      poNo: purchaseOrder?.po_no ?? null,
+      supplierName: purchaseOrder?.suppliers?.name ?? null,
+      invoicePath: grn.invoice_path,
       lines: (lines ?? []).map((l) => ({
         id: l.id,
         itemType: l.item_type,
@@ -320,9 +525,93 @@ export async function getGrnDetail(
         damagedQtyG: l.damaged_qty_g,
         reason: l.reason,
         overReceived: l.over_received,
+        rate: l.rate == null ? null : Number(l.rate),
       })),
     },
   };
+}
+
+export async function updateGrnLineRate(
+  lineId: string,
+  rate: number | null,
+): Promise<ActionResult<null>> {
+  const session = await requireReceiveAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsedId = z.uuid().safeParse(lineId);
+  if (!parsedId.success) return { success: false, error: "Invalid line." };
+  const parsedRate = z.coerce.number().nonnegative().nullable().safeParse(rate);
+  if (!parsedRate.success) return { success: false, error: "Invalid rate." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("grn_lines")
+    .update({ rate: parsedRate.data })
+    .eq("id", parsedId.data);
+  if (error) return { success: false, error: error.message };
+
+  return { success: true, data: null };
+}
+
+export async function uploadGrnInvoice(
+  grnId: string,
+  formData: FormData,
+): Promise<ActionResult<{ path: string }>> {
+  const session = await requireReceiveAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsed = z.uuid().safeParse(grnId);
+  if (!parsed.success) return { success: false, error: "Invalid GRN." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { success: false, error: "No file selected." };
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    return { success: false, error: "File is too large (10MB max)." };
+  }
+
+  const supabase = await createClient();
+  const path = `${parsed.data}/${file.name}`;
+  const { error: uploadError } = await supabase.storage
+    .from("grn-invoices")
+    .upload(path, file, { upsert: true });
+  if (uploadError) return { success: false, error: uploadError.message };
+
+  const { error: updateError } = await supabase
+    .from("grns")
+    .update({ invoice_path: path })
+    .eq("id", parsed.data);
+  if (updateError) return { success: false, error: updateError.message };
+
+  revalidatePath("/send-receive/receive");
+  return { success: true, data: { path } };
+}
+
+export async function getGrnInvoiceUrl(
+  grnId: string,
+): Promise<ActionResult<string | null>> {
+  const session = await requireReceiveAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsed = z.uuid().safeParse(grnId);
+  if (!parsed.success) return { success: false, error: "Invalid GRN." };
+
+  const admin = createAdminClient();
+  const { data: grn } = await admin
+    .from("grns")
+    .select("invoice_path")
+    .eq("id", parsed.data)
+    .single();
+  if (!grn?.invoice_path) return { success: true, data: null };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from("grn-invoices")
+    .createSignedUrl(grn.invoice_path, 60 * 10);
+  if (error) return { success: false, error: error.message };
+
+  return { success: true, data: data.signedUrl };
 }
 
 const updateLineSchema = z.object({
@@ -375,5 +664,6 @@ export async function postGrn(grnId: string): Promise<ActionResult<null>> {
 
   revalidatePath("/send-receive/receive");
   revalidatePath("/send-receive/in-transit");
+  revalidatePath("/buy/orders");
   return { success: true, data: null };
 }

@@ -24,7 +24,13 @@ export const SEND_RECEIVE_TABS: SendReceiveTab[] = [
   {
     label: "Receive",
     href: "/send-receive/receive",
-    roles: ["admin", "branch_manager", "store_manager", "hod"],
+    roles: [
+      "admin",
+      "branch_manager",
+      "store_manager",
+      "purchase_manager",
+      "hod",
+    ],
   },
   {
     label: "Transit variance",
