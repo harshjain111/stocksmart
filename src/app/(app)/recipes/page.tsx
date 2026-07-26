@@ -16,27 +16,38 @@ export default async function RecipesPage() {
 
   const admin = createAdminClient();
 
-  const [{ data: flavours }, { data: versions }, { data: materials }] =
-    await Promise.all([
-      admin
-        .from("flavours")
-        .select("id, code, name, is_active, current_version_id")
-        .order("code"),
-      admin
-        .from("recipe_versions")
-        .select("id, flavour_id, version_no, status, created_at")
-        .order("version_no", { ascending: false }),
-      admin
-        .from("raw_materials")
-        .select("id, name")
-        .eq("is_active", true)
-        .order("name"),
-    ]);
+  const [
+    { data: flavours },
+    { data: versions },
+    { data: materials },
+    { data: batches },
+  ] = await Promise.all([
+    admin
+      .from("flavours")
+      .select("id, code, name, is_active, current_version_id")
+      .order("code"),
+    admin
+      .from("recipe_versions")
+      .select("id, flavour_id, version_no, status, created_at")
+      .order("version_no", { ascending: false }),
+    admin
+      .from("raw_materials")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name"),
+    admin.from("batches").select("recipe_version_id"),
+  ]);
 
-  // Batch counts are always 0 until batches exists (prompt 2.7).
+  const batchCountByVersionId = new Map<string, number>();
+  for (const b of batches ?? []) {
+    batchCountByVersionId.set(
+      b.recipe_version_id,
+      (batchCountByVersionId.get(b.recipe_version_id) ?? 0) + 1,
+    );
+  }
   const versionSummaries = (versions ?? []).map((v) => ({
     ...v,
-    batchCount: 0,
+    batchCount: batchCountByVersionId.get(v.id) ?? 0,
   }));
 
   return (
