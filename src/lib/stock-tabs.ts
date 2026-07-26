@@ -17,6 +17,11 @@ export const STOCK_TABS: StockTab[] = [
     href: "/stock/opening",
     roles: ["admin", "store_manager"],
   },
+  {
+    label: "Count stock",
+    href: "/stock/count",
+    roles: ["admin", "branch_manager", "store_manager", "hod"],
+  },
 ];
 
 export function canAccessStockTab(role: UserRole, href: string): boolean {
