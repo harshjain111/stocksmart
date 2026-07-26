@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ShoppingCart, Plus, Trash2 } from "lucide-react";
 import {
   getOrders,
@@ -72,6 +73,7 @@ export function OrdersView({
   isAdmin: boolean;
   canCreateOrders: boolean;
 }) {
+  const router = useRouter();
   const [rows, setRows] = React.useState(initialOrders);
   const [loading, setLoading] = React.useState(false);
   const [supplierId, setSupplierId] = React.useState("");
@@ -250,6 +252,7 @@ export function OrdersView({
         columns={columns}
         data={rows}
         isLoading={loading}
+        onRowClick={(r) => router.push(`/buy/orders/${r.id}`)}
         getRowKey={(r) => r.id}
         emptyState={
           <EmptyState
