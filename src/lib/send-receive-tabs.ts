@@ -26,6 +26,11 @@ export const SEND_RECEIVE_TABS: SendReceiveTab[] = [
     href: "/send-receive/receive",
     roles: ["admin", "branch_manager", "store_manager", "hod"],
   },
+  {
+    label: "Transit variance",
+    href: "/send-receive/variance",
+    roles: ["admin", "branch_manager", "store_manager"],
+  },
 ];
 
 export function canAccessSendReceiveTab(role: UserRole, href: string): boolean {
