@@ -13,7 +13,8 @@
     "test:recipe-immutability": "node scripts/test-recipe-immutability.mjs",
     "test:rls-recipes": "node scripts/test-rls-recipes.mjs",
     "test:masked-batch-card": "node scripts/test-masked-batch-card.mjs",
-    "test:confirm-batch": "node scripts/test-confirm-batch.mjs"
+    "test:confirm-batch": "node scripts/test-confirm-batch.mjs",
+    "reconcile:stock-balances": "node scripts/reconcile-stock-balances.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
