@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const SETUP_TABS = [
   { label: "Branches & departments", href: "/setup/branches" },
+  { label: "People", href: "/setup/people" },
 ];
 
 export function SetupTabs() {

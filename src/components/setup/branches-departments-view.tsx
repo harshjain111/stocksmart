@@ -478,7 +478,11 @@ function DepartmentDialog({
               control={control}
               name="type"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  items={DEPARTMENT_TYPES}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a type" />
                   </SelectTrigger>
@@ -546,6 +550,13 @@ function DepartmentDialog({
               name="hodId"
               render={({ field }) => (
                 <Select
+                  items={[
+                    { value: "none", label: "Unassigned" },
+                    ...profiles.map((p) => ({
+                      value: p.id,
+                      label: p.full_name,
+                    })),
+                  ]}
                   value={field.value ?? "none"}
                   onValueChange={(v) => field.onChange(v === "none" ? null : v)}
                 >

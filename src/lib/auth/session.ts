@@ -1,6 +1,6 @@
 import "server-only";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type UserRole =
   | "admin"
@@ -39,14 +39,6 @@ type UserDepartmentRow = {
   departments: { id: string; name: string; branch_id: string } | null;
 };
 
-function createAdmin() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-}
-
 /**
  * Loads "who am I" for the current request. RLS on profiles/departments
  * isn't written until prompt 1.6, so this bootstrap read uses the
@@ -61,7 +53,7 @@ export async function getSession(): Promise<Session | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const admin = createAdmin();
+  const admin = createAdminClient();
 
   const { data: profile } = await admin
     .from("profiles")
