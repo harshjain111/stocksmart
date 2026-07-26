@@ -59,7 +59,7 @@ type WhatToBuyResult = {
 // netted at requisition-decision time (the requisition qty_g *is* the
 // shortfall); from here on the only "have" that matters is what the
 // godown itself is already sitting on.
-async function godownsByBranch(
+export async function godownsByBranch(
   admin: ReturnType<typeof createAdminClient>,
   branchIds: string[],
 ): Promise<Map<string, { id: string; name: string }>> {
@@ -370,6 +370,8 @@ const createOrdersSchema = z.array(
         z.object({
           rawMaterialId: z.uuid(),
           qtyG: z.coerce.number().int().positive(),
+          // A blank rate is valid — it marks the order rate-to-confirm.
+          rate: z.coerce.number().nonnegative().nullable().optional(),
         }),
       )
       .min(1),
@@ -450,6 +452,7 @@ export async function createDraftOrders(
         purchase_order_id: po.id,
         raw_material_id: line.rawMaterialId,
         qty_g: line.qtyG,
+        rate: line.rate ?? null,
       })),
     );
     if (linesError) return { success: false, error: linesError.message };
