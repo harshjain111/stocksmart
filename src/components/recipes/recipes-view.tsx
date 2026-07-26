@@ -1,11 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { FlaskConical, Pencil } from "lucide-react";
-import { getVersionDetail } from "@/app/(app)/recipes/actions";
+import { useRouter } from "next/navigation";
+import { FlaskConical, Pencil, RotateCcw } from "lucide-react";
+import {
+  getVersionDetail,
+  rollbackRecipeVersion,
+} from "@/app/(app)/recipes/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusTag } from "@/components/shared/status-tag";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -50,6 +55,7 @@ export function RecipesView({
   materials: Material[];
   canCreateVersion: boolean;
 }) {
+  const router = useRouter();
   const [selectedFlavourId, setSelectedFlavourId] = React.useState<
     string | null
   >(flavours[0]?.id ?? null);
@@ -59,6 +65,8 @@ export function RecipesView({
   const [detail, setDetail] = React.useState<VersionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = React.useState(false);
   const [newVersionOpen, setNewVersionOpen] = React.useState(false);
+  const [rollbackTarget, setRollbackTarget] =
+    React.useState<VersionSummary | null>(null);
 
   const flavourVersions = versions
     .filter((v) => v.flavour_id === selectedFlavourId)
@@ -66,6 +74,9 @@ export function RecipesView({
 
   const nextVersionNo = (flavourVersions[0]?.version_no ?? 0) + 1;
   const selectedFlavour = flavours.find((f) => f.id === selectedFlavourId);
+  const selectedVersionSummary = flavourVersions.find(
+    (v) => v.id === selectedVersionId,
+  );
 
   async function selectVersion(versionId: string) {
     setSelectedVersionId(versionId);
@@ -216,6 +227,20 @@ export function RecipesView({
                           )}{" "}
                           · {detail.wastagePct}% wastage
                         </p>
+                        {canCreateVersion &&
+                          selectedVersionSummary?.status === "archived" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-3"
+                              onClick={() =>
+                                setRollbackTarget(selectedVersionSummary)
+                              }
+                            >
+                              <RotateCcw /> Make v
+                              {selectedVersionSummary.version_no} current again
+                            </Button>
+                          )}
                       </div>
                     </>
                   ) : (
@@ -250,6 +275,23 @@ export function RecipesView({
               percentage: l.percentage,
             })) ?? []
           }
+        />
+      )}
+
+      {rollbackTarget && (
+        <ConfirmDialog
+          open={!!rollbackTarget}
+          onOpenChange={(open) => !open && setRollbackTarget(null)}
+          title={`Make v${rollbackTarget.version_no} current again`}
+          description="No data is copied or changed — this just flips which version is current. The version now active gets archived."
+          confirmPhrase={`v${rollbackTarget.version_no}`}
+          confirmLabel="Make current"
+          destructive={false}
+          onConfirm={async () => {
+            const result = await rollbackRecipeVersion(rollbackTarget.id);
+            if (!result.success) throw new Error(result.error);
+            router.refresh();
+          }}
         />
       )}
     </div>

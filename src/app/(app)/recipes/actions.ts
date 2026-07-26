@@ -125,3 +125,27 @@ export async function createRecipeVersion(
   revalidatePath("/recipes");
   return { success: true };
 }
+
+// Same auth-context requirement as createRecipeVersion — must go through
+// the per-request client so auth.uid() resolves to the real caller.
+export async function rollbackRecipeVersion(
+  versionId: string,
+): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || session.role !== "admin") {
+    return { success: false, error: "Only admin can roll back a version." };
+  }
+
+  const parsed = z.uuid().safeParse(versionId);
+  if (!parsed.success) return { success: false, error: "Invalid version." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("rollback_recipe_version", {
+    p_version_id: parsed.data,
+  });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/recipes");
+  return { success: true };
+}

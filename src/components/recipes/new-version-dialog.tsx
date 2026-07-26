@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { createRecipeVersion } from "@/app/(app)/recipes/actions";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ export function NewVersionDialog({
   prefillWastagePct: number;
   prefillLines: { rawMaterialId: string; percentage: number }[];
 }) {
+  const router = useRouter();
   const [wastagePct, setWastagePct] = React.useState(String(prefillWastagePct));
   const [note, setNote] = React.useState("");
   const [lines, setLines] = React.useState<LineDraft[]>(
@@ -122,6 +124,7 @@ export function NewVersionDialog({
     }
     reset();
     onOpenChange(false);
+    router.refresh();
   }
 
   return (
