@@ -50,7 +50,7 @@ export async function getVersionDetail(
 
   const { data: version, error: versionError } = await admin
     .from("recipe_versions")
-    .select("note, created_at, created_by, flavour_id, wastage_pct")
+    .select("note, created_at, created_by, flavour_id, wastage_pct, version_no")
     .eq("id", parsed.data)
     .single();
   if (versionError || !version) {
@@ -72,6 +72,24 @@ export async function getVersionDetail(
       .eq("id", version.created_by)
       .single();
     if (profile) createdByName = profile.full_name;
+  }
+
+  // Every read of a recipe's lines is logged — via the per-request client
+  // so auth.uid() resolves to the real caller inside log_audit_event().
+  // A logging failure shouldn't block the user from seeing the recipe they
+  // already have access to, so this doesn't fail the read on error.
+  const supabase = await createClient();
+  const { error: logError } = await supabase.rpc("log_audit_event", {
+    p_action: "recipe_read",
+    p_entity_type: "recipe_version",
+    p_entity_id: parsed.data,
+    p_metadata: {
+      flavour_id: version.flavour_id,
+      version_no: version.version_no,
+    },
+  });
+  if (logError) {
+    console.error("Failed to log recipe_read audit event:", logError.message);
   }
 
   return {

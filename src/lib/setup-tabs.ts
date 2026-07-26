@@ -23,6 +23,11 @@ export const SETUP_TABS: SetupTab[] = [
     href: "/setup/materials",
     roles: ["admin", "purchase_manager"],
   },
+  {
+    label: "Recipe access",
+    href: "/setup/recipe-access",
+    roles: ["admin"],
+  },
 ];
 
 /** True if the role can reach at least one Setup tab. */
