@@ -14,6 +14,7 @@
     "test:rls-recipes": "node scripts/test-rls-recipes.mjs",
     "test:masked-batch-card": "node scripts/test-masked-batch-card.mjs",
     "test:confirm-batch": "node scripts/test-confirm-batch.mjs",
+    "test:buy-engine": "node --test src/lib/buy/buy-engine.test.ts",
     "reconcile:stock-balances": "node scripts/reconcile-stock-balances.mjs"
   },
   "dependencies": {
