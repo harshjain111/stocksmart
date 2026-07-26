@@ -252,7 +252,8 @@ export async function getRequisitionDetail(
     .select(
       "id, item_type, item_id, qty_g, decision, approved_qty_g, decision_note",
     )
-    .eq("requisition_id", parsed.data);
+    .eq("requisition_id", parsed.data)
+    .order("created_at", { ascending: true });
 
   const rawIds = (lines ?? [])
     .filter((l) => l.item_type === "raw")
