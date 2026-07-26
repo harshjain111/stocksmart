@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MakeBatchView } from "@/components/mix/make-batch-view";
 import { MixerBatchQueueView } from "@/components/mix/mixer-batch-queue-view";
+import { OpsBatchQueueView } from "@/components/mix/ops-batch-queue-view";
 
 type DepartmentRow = {
   id: string;
@@ -49,14 +50,19 @@ export default async function MixPage() {
     ]);
 
   return (
-    <MakeBatchView
-      flavours={flavours ?? []}
-      versions={versions ?? []}
-      departments={(departments ?? []).map((d) => ({
-        id: d.id,
-        name: d.name,
-        branchName: d.branches?.name ?? "",
-      }))}
-    />
+    <>
+      <MakeBatchView
+        flavours={flavours ?? []}
+        versions={versions ?? []}
+        departments={(departments ?? []).map((d) => ({
+          id: d.id,
+          name: d.name,
+          branchName: d.branches?.name ?? "",
+        }))}
+      />
+      <div className="px-6 pb-6">
+        <OpsBatchQueueView />
+      </div>
+    </>
   );
 }

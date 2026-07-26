@@ -13,6 +13,7 @@ import {
   fetchMaskedBatchCard,
   type MaskedBatchCard,
 } from "@/lib/mix/masked-batch-card";
+import { fetchOpsBatchCard, type OpsBatchCard } from "@/lib/mix/ops-batch-card";
 
 type ActionResult<T> =
   { success: true; data: T } | { success: false; error: string };
@@ -253,23 +254,14 @@ type DraftBatchSummary = {
   createdAt: string;
 };
 
-// Draft batches at the mixer's own branch — there's no formal per-mixer
-// assignment yet, so this is the whole branch's queue rather than a
-// personal one. Only draft batches: once confirmed, a batch is history,
-// not something waiting to be mixed.
-export async function listDraftBatchesForMixer(): Promise<
-  ActionResult<DraftBatchSummary[]>
-> {
-  const session = await requireMixerAccess();
-  if (!session || !session.branchId) {
-    return { success: false, error: "Access required." };
-  }
-
+async function listDraftBatchesForBranch(
+  branchId: string,
+): Promise<ActionResult<DraftBatchSummary[]>> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("batches")
     .select("id, batch_no, output_g, created_at, flavours(name)")
-    .eq("branch_id", session.branchId)
+    .eq("branch_id", branchId)
     .eq("status", "draft")
     .order("created_at", { ascending: false });
   if (error) return { success: false, error: error.message };
@@ -288,6 +280,20 @@ export async function listDraftBatchesForMixer(): Promise<
   };
 }
 
+// Draft batches at the mixer's own branch — there's no formal per-mixer
+// assignment yet, so this is the whole branch's queue rather than a
+// personal one. Only draft batches: once confirmed, a batch is history,
+// not something waiting to be mixed.
+export async function listDraftBatchesForMixer(): Promise<
+  ActionResult<DraftBatchSummary[]>
+> {
+  const session = await requireMixerAccess();
+  if (!session || !session.branchId) {
+    return { success: false, error: "Access required." };
+  }
+  return listDraftBatchesForBranch(session.branchId);
+}
+
 export async function getMaskedBatchCard(
   batchId: string,
 ): Promise<ActionResult<MaskedBatchCard>> {
@@ -301,4 +307,76 @@ export async function getMaskedBatchCard(
 
   const admin = createAdminClient();
   return fetchMaskedBatchCard(admin, parsed.data, session.branchId);
+}
+
+// Same draft queue as the mixer's, unmasked — admin/senior_mixer already
+// have real recipe access, so there's nothing to strip.
+export async function listDraftBatchesForOps(): Promise<
+  ActionResult<DraftBatchSummary[]>
+> {
+  const session = await requireMixAccess();
+  if (!session || !session.branchId) {
+    return { success: false, error: "Access required." };
+  }
+  return listDraftBatchesForBranch(session.branchId);
+}
+
+export async function getOpsBatchCard(
+  batchId: string,
+): Promise<ActionResult<OpsBatchCard>> {
+  const session = await requireMixAccess();
+  if (!session || !session.branchId) {
+    return { success: false, error: "Access required." };
+  }
+
+  const parsed = z.uuid().safeParse(batchId);
+  if (!parsed.success) return { success: false, error: "Invalid batch." };
+
+  const admin = createAdminClient();
+  return fetchOpsBatchCard(admin, parsed.data, session.branchId);
+}
+
+// Confirmation itself (2.10): captures actual weights (defaulting to
+// planned for any component not listed), posts batch_consume/batch_produce
+// movements and locks the batch — all inside confirm_batch(), one
+// SECURITY DEFINER function, so it's fully atomic. Shared by both the
+// masked (mixer) and full-detail (admin/senior_mixer) cards — the RPC
+// itself re-checks the caller's role and branch, so this wrapper only
+// needs to gate "signed in as a role that has a Mix screen at all".
+export async function confirmBatch(
+  batchId: string,
+  actualGrams: { rawMaterialId: string; actualG: number }[],
+): Promise<{ success: true } | { success: false; error: string }> {
+  const session = await getSession();
+  if (!session || !["admin", "senior_mixer", "mixer"].includes(session.role)) {
+    return { success: false, error: "Access required." };
+  }
+
+  const parsedId = z.uuid().safeParse(batchId);
+  if (!parsedId.success) return { success: false, error: "Invalid batch." };
+
+  const parsedGrams = z
+    .array(
+      z.object({
+        rawMaterialId: z.uuid(),
+        actualG: z.coerce.number().int().nonnegative(),
+      }),
+    )
+    .safeParse(actualGrams);
+  if (!parsedGrams.success) {
+    return { success: false, error: "Invalid actual weights." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("confirm_batch", {
+    p_batch_id: parsedId.data,
+    p_actual_grams: parsedGrams.data.map((g) => ({
+      rawMaterialId: g.rawMaterialId,
+      actualG: g.actualG,
+    })),
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/recipes");
+  return { success: true };
 }

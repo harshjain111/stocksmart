@@ -2,14 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical } from "lucide-react";
 import {
-  listDraftBatchesForMixer,
-  getMaskedBatchCard,
+  listDraftBatchesForOps,
+  getOpsBatchCard,
   confirmBatch,
 } from "@/app/(app)/mix/actions";
-import { PageHeader } from "@/components/shared/page-header";
-import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -26,13 +23,15 @@ type BatchSummary = {
   createdAt: string;
 };
 
-type MaskedLine = {
+type OpsLine = {
   rawMaterialId: string;
   code: string | null;
+  name: string;
+  percentage: number;
   plannedG: number;
 };
 
-export function MixerBatchQueueView() {
+export function OpsBatchQueueView() {
   const router = useRouter();
   const [batches, setBatches] = React.useState<BatchSummary[]>([]);
   const [loadingList, setLoadingList] = React.useState(true);
@@ -41,7 +40,7 @@ export function MixerBatchQueueView() {
     batchNo: string;
     flavourName: string;
     outputG: number;
-    lines: MaskedLine[];
+    lines: OpsLine[];
   } | null>(null);
   const [loadingCard, setLoadingCard] = React.useState(false);
   const [ticked, setTicked] = React.useState<Record<string, boolean>>({});
@@ -50,7 +49,7 @@ export function MixerBatchQueueView() {
   const [serverError, setServerError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    listDraftBatchesForMixer().then((result) => {
+    listDraftBatchesForOps().then((result) => {
       setLoadingList(false);
       if (result.success) setBatches(result.data);
     });
@@ -63,7 +62,7 @@ export function MixerBatchQueueView() {
     setActualG({});
     setServerError(null);
     setLoadingCard(true);
-    const result = await getMaskedBatchCard(id);
+    const result = await getOpsBatchCard(id);
     setLoadingCard(false);
     if (result.success) {
       setCard(result.data);
@@ -101,40 +100,19 @@ export function MixerBatchQueueView() {
     setCard(null);
     setTicked({});
     setActualG({});
-    const refreshed = await listDraftBatchesForMixer();
+    const refreshed = await listDraftBatchesForOps();
     if (refreshed.success) setBatches(refreshed.data);
     router.refresh();
   }
 
-  if (loadingList) {
-    return (
-      <div className="flex flex-col gap-6 p-6">
-        <PageHeader title="Batches to mix" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
-  }
-
-  if (batches.length === 0) {
-    return (
-      <div className="flex flex-col gap-6 p-6">
-        <PageHeader title="Batches to mix" />
-        <EmptyState
-          icon={FlaskConical}
-          title="Nothing waiting to be mixed"
-          description="Draft batches created for your branch will show up here."
-        />
-      </div>
-    );
-  }
+  if (loadingList) return <Skeleton className="h-24 w-full" />;
+  if (batches.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <PageHeader
-        title="Batches to mix"
-        description="Weigh each component, tick it off, then confirm."
-      />
-
+    <div className="grid gap-2">
+      <h2 className="text-lg font-semibold tracking-tight">
+        Drafts waiting to be confirmed
+      </h2>
       <div className="grid gap-4 md:grid-cols-[260px_1fr]">
         <Card className="h-fit">
           <CardContent className="grid gap-1 p-2">
@@ -163,7 +141,7 @@ export function MixerBatchQueueView() {
           <CardContent className="grid gap-4">
             {!selectedId ? (
               <p className="text-muted-foreground text-sm">
-                Select a batch to see what to weigh.
+                Select a batch to confirm it.
               </p>
             ) : loadingCard ? (
               <div className="grid gap-2">
@@ -194,8 +172,14 @@ export function MixerBatchQueueView() {
                           }))
                         }
                       />
-                      <span className="font-qty flex-1 text-sm font-medium">
-                        {line.code ?? "—"}
+                      <span className="flex-1 text-sm font-medium">
+                        {line.name}
+                        {line.code && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · {line.code}
+                          </span>
+                        )}
                       </span>
                       <span className="text-muted-foreground text-xs">
                         planned {formatGrams(line.plannedG)}
