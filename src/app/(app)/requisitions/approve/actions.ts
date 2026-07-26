@@ -233,3 +233,22 @@ export async function saveLineDecision(
   revalidatePath("/requisitions/approve");
   return { success: true, data: null };
 }
+
+export async function approveRequisition(
+  requisitionId: string,
+): Promise<ActionResult<null>> {
+  const session = await requireApproverAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsed = z.uuid().safeParse(requisitionId);
+  if (!parsed.success) return { success: false, error: "Invalid requisition." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("approve_requisition", {
+    p_requisition_id: parsed.data,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/requisitions/approve");
+  return { success: true, data: null };
+}

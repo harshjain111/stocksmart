@@ -6,11 +6,13 @@ import { ClipboardCheck } from "lucide-react";
 import {
   getApprovalDetail,
   saveLineDecision,
+  approveRequisition,
 } from "@/app/(app)/requisitions/approve/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -161,6 +163,7 @@ function ApprovalDetailPanel({
     new Set(),
   );
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const [isApproving, setIsApproving] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -228,6 +231,20 @@ function ApprovalDetailPanel({
     }
   }
 
+  async function handleApprove() {
+    if (!detail) return;
+    setServerError(null);
+    setIsApproving(true);
+    const result = await approveRequisition(detail.id);
+    setIsApproving(false);
+    if (!result.success) {
+      setServerError(result.error);
+      return;
+    }
+    onChange();
+    load();
+  }
+
   if (loading) return <Skeleton className="h-64 w-full" />;
   if (!detail) {
     return (
@@ -236,6 +253,8 @@ function ApprovalDetailPanel({
       </p>
     );
   }
+
+  const allDecided = detail.lines.every((l) => decisions[l.id]);
 
   return (
     <div className="grid gap-4">
@@ -367,6 +386,20 @@ function ApprovalDetailPanel({
       </div>
 
       {serverError && <p className="text-destructive text-sm">{serverError}</p>}
+
+      {detail.status === "submitted" && (
+        <div className="flex flex-col items-start gap-2">
+          <Button disabled={!allDecided || isApproving} onClick={handleApprove}>
+            {isApproving ? "Approving…" : "Approve"}
+          </Button>
+          {!allDecided && (
+            <p className="text-muted-foreground text-xs">
+              Every line needs a decision before this requisition can be
+              approved.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
