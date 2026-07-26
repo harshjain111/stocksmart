@@ -1,0 +1,10 @@
+.next
+node_modules
+package-lock.json
+
+# spec / reference docs — kept byte-for-byte as provided
+CLAUDE.md
+CLAUDE_5.md
+PRD.md
+PRD_2.md
+BUILD_PROMPTS_1.md
