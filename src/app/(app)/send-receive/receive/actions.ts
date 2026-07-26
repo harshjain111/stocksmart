@@ -359,3 +359,21 @@ export async function updateGrnLine(
   revalidatePath("/send-receive/receive");
   return { success: true, data: null };
 }
+
+export async function postGrn(grnId: string): Promise<ActionResult<null>> {
+  const session = await requireReceiveAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsed = z.uuid().safeParse(grnId);
+  if (!parsed.success) return { success: false, error: "Invalid GRN." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("post_grn", {
+    p_grn_id: parsed.data,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/send-receive/receive");
+  revalidatePath("/send-receive/in-transit");
+  return { success: true, data: null };
+}

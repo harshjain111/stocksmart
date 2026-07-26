@@ -7,11 +7,13 @@ import {
   getOrCreateGrnForTransfer,
   getGrnDetail,
   updateGrnLine,
+  postGrn,
 } from "@/app/(app)/send-receive/receive/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -172,6 +174,7 @@ function GrnFormPanel({
     new Set(),
   );
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const [isPosting, setIsPosting] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -247,6 +250,20 @@ function GrnFormPanel({
     }
   }
 
+  async function handlePost() {
+    if (!detail) return;
+    setServerError(null);
+    setIsPosting(true);
+    const result = await postGrn(detail.id);
+    setIsPosting(false);
+    if (!result.success) {
+      setServerError(result.error);
+      return;
+    }
+    onChange();
+    load();
+  }
+
   if (loading) return <Skeleton className="h-64 w-full" />;
   if (!detail) {
     return (
@@ -257,6 +274,9 @@ function GrnFormPanel({
   }
 
   const isDraft = detail.status === "draft";
+  const allLinesReceived = detail.lines.every(
+    (l) => (receivedKg[l.id] ?? "").trim() !== "",
+  );
 
   return (
     <div className="grid gap-4">
@@ -387,6 +407,23 @@ function GrnFormPanel({
       </div>
 
       {serverError && <p className="text-destructive text-sm">{serverError}</p>}
+
+      {isDraft && (
+        <div className="flex flex-col items-start gap-2">
+          <Button
+            disabled={!allLinesReceived || isPosting}
+            onClick={handlePost}
+          >
+            {isPosting ? "Posting…" : "Post"}
+          </Button>
+          {!allLinesReceived && (
+            <p className="text-muted-foreground text-xs">
+              Every line needs a received quantity before this GRN can be
+              posted.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
