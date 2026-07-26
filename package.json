@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "test:rls": "node scripts/test-rls-org-tables.mjs",
     "test:doc-sequences": "node scripts/test-doc-sequences.mjs",
-    "test:recipe-immutability": "node scripts/test-recipe-immutability.mjs"
+    "test:recipe-immutability": "node scripts/test-recipe-immutability.mjs",
+    "test:rls-recipes": "node scripts/test-rls-recipes.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
