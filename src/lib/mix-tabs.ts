@@ -15,6 +15,11 @@ export const MIX_TABS: MixTab[] = [
     href: "/mix/past-batches",
     roles: ["admin", "senior_mixer"],
   },
+  {
+    label: "Mixing variance",
+    href: "/mix/variance",
+    roles: ["admin", "senior_mixer"],
+  },
 ];
 
 export function canAccessMixTab(role: UserRole, href: string): boolean {
