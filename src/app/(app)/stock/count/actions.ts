@@ -110,8 +110,9 @@ async function loadSheet(countId: string): Promise<CountSheet> {
   };
 }
 
-// One active (draft) count per department at a time — if one already
-// exists, resume it rather than letting a fresh generate spawn a duplicate.
+// One active count per department at a time — draft (editable) or
+// submitted (awaiting approval). If one exists, resume/show it rather than
+// letting a fresh generate spawn a duplicate.
 export async function getActiveCountForDepartment(
   departmentId: string,
 ): Promise<ActionResult<CountSheet | null>> {
@@ -129,7 +130,7 @@ export async function getActiveCountForDepartment(
     .from("stock_counts")
     .select("id")
     .eq("department_id", parsed.data)
-    .eq("status", "draft")
+    .in("status", ["draft", "submitted"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -285,6 +286,7 @@ export async function generateCountSheet(
 export async function updateCountLine(
   lineId: string,
   countedQtyG: number | null,
+  reason: string,
 ): Promise<ActionResult<null>> {
   const session = await requireCountAccess();
   if (!session) return { success: false, error: "Access required." };
@@ -302,9 +304,80 @@ export async function updateCountLine(
   const supabase = await createClient();
   const { error } = await supabase
     .from("stock_count_lines")
-    .update({ counted_qty_g: parsedQty.data })
+    .update({ counted_qty_g: parsedQty.data, reason: reason.trim() || null })
     .eq("id", parsedId.data);
   if (error) return { success: false, error: error.message };
 
+  return { success: true, data: null };
+}
+
+// Any line with a real difference (counted set and not equal to system)
+// needs a reason before the count can be submitted — validated here, not
+// just in the UI (rule 8: UI hiding/disabling isn't access control).
+export async function submitCount(
+  countId: string,
+): Promise<ActionResult<null>> {
+  const session = await requireCountAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsed = z.uuid().safeParse(countId);
+  if (!parsed.success) return { success: false, error: "Invalid count." };
+
+  const admin = createAdminClient();
+  const { data: lines, error: linesError } = await admin
+    .from("stock_count_lines")
+    .select("system_qty_g, counted_qty_g, reason")
+    .eq("count_id", parsed.data);
+  if (linesError) return { success: false, error: linesError.message };
+
+  const missingReason = (lines ?? []).some(
+    (l) =>
+      l.counted_qty_g != null &&
+      l.counted_qty_g !== l.system_qty_g &&
+      !l.reason?.trim(),
+  );
+  if (missingReason) {
+    return {
+      success: false,
+      error: "Every line with a difference needs a reason before submitting.",
+    };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("stock_counts")
+    .update({
+      status: "submitted",
+      submitted_by: session.userId,
+      submitted_at: new Date().toISOString(),
+    })
+    .eq("id", parsed.data);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/stock/count");
+  return { success: true, data: null };
+}
+
+export async function approveCount(
+  countId: string,
+): Promise<ActionResult<null>> {
+  const session = await getSession();
+  if (!session || !["admin", "store_manager"].includes(session.role)) {
+    return {
+      success: false,
+      error: "Only admin or store manager can approve a count.",
+    };
+  }
+
+  const parsed = z.uuid().safeParse(countId);
+  if (!parsed.success) return { success: false, error: "Invalid count." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("approve_stock_count", {
+    p_count_id: parsed.data,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/stock/count");
   return { success: true, data: null };
 }

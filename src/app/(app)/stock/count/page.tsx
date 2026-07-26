@@ -39,6 +39,7 @@ export default async function CountStockPage() {
         holdsRaw: d.holds_raw,
         holdsMixed: d.holds_mixed,
       }))}
+      isApprover={["admin", "store_manager"].includes(session.role)}
     />
   );
 }

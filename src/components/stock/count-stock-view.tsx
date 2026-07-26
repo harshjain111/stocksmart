@@ -1,11 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ClipboardList } from "lucide-react";
 import {
   getActiveCountForDepartment,
   generateCountSheet,
   updateCountLine,
+  submitCount,
+  approveCount,
 } from "@/app/(app)/stock/count/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -51,7 +54,14 @@ type CountSheet = {
   lines: CountLine[];
 };
 
-export function CountStockView({ departments }: { departments: Department[] }) {
+export function CountStockView({
+  departments,
+  isApprover,
+}: {
+  departments: Department[];
+  isApprover: boolean;
+}) {
+  const router = useRouter();
   const [departmentId, setDepartmentId] = React.useState(
     departments[0]?.id ?? "",
   );
@@ -64,9 +74,12 @@ export function CountStockView({ departments }: { departments: Department[] }) {
   const [generating, setGenerating] = React.useState(false);
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [values, setValues] = React.useState<Record<string, string>>({});
+  const [reasons, setReasons] = React.useState<Record<string, string>>({});
   const [savedLineIds, setSavedLineIds] = React.useState<Set<string>>(
     new Set(),
   );
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isApproving, setIsApproving] = React.useState(false);
 
   const load = React.useCallback(async (id: string) => {
     setLoading(true);
@@ -86,6 +99,11 @@ export function CountStockView({ departments }: { departments: Department[] }) {
             l.id,
             l.countedQtyG != null ? String(l.countedQtyG / 1000) : "",
           ]),
+        ),
+      );
+      setReasons(
+        Object.fromEntries(
+          result.data.lines.map((l) => [l.id, l.reason ?? ""]),
         ),
       );
     }
@@ -115,6 +133,7 @@ export function CountStockView({ departments }: { departments: Department[] }) {
     }
     setSheet(result.data);
     setValues({});
+    setReasons({});
   }
 
   async function handleBlur(lineId: string) {
@@ -123,7 +142,11 @@ export function CountStockView({ departments }: { departments: Department[] }) {
       value === undefined || value.trim() === ""
         ? null
         : Math.round(parseFloat(value) * 1000) || 0;
-    const result = await updateCountLine(lineId, countedQtyG);
+    const result = await updateCountLine(
+      lineId,
+      countedQtyG,
+      reasons[lineId] ?? "",
+    );
     if (result.success) {
       setSavedLineIds((prev) => new Set(prev).add(lineId));
       setTimeout(
@@ -136,6 +159,34 @@ export function CountStockView({ departments }: { departments: Department[] }) {
         1500,
       );
     }
+  }
+
+  async function handleSubmit() {
+    if (!sheet) return;
+    setServerError(null);
+    setIsSubmitting(true);
+    const result = await submitCount(sheet.countId);
+    setIsSubmitting(false);
+    if (!result.success) {
+      setServerError(result.error);
+      return;
+    }
+    router.refresh();
+    load(departmentId);
+  }
+
+  async function handleApprove() {
+    if (!sheet) return;
+    setServerError(null);
+    setIsApproving(true);
+    const result = await approveCount(sheet.countId);
+    setIsApproving(false);
+    if (!result.success) {
+      setServerError(result.error);
+      return;
+    }
+    router.refresh();
+    load(departmentId);
   }
 
   if (departments.length === 0) {
@@ -189,6 +240,12 @@ export function CountStockView({ departments }: { departments: Department[] }) {
             <StatusTag status={sheet.status} />
           </div>
 
+          {sheet.status === "submitted" && !isApprover && (
+            <p className="text-muted-foreground text-sm">
+              Waiting for admin or the store manager to approve.
+            </p>
+          )}
+
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead>
@@ -205,6 +262,9 @@ export function CountStockView({ departments }: { departments: Department[] }) {
                   <th className="text-muted-foreground px-3 py-2 text-right font-medium">
                     Difference
                   </th>
+                  <th className="text-muted-foreground px-3 py-2 text-left font-medium">
+                    Reason
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -216,6 +276,7 @@ export function CountStockView({ departments }: { departments: Department[] }) {
                     : null;
                   const diffG =
                     countedG != null ? countedG - line.systemQtyG : null;
+                  const needsReason = diffG != null && diffG !== 0;
                   return (
                     <tr key={line.id} className="border-b last:border-0">
                       <td className="px-3 py-2 whitespace-nowrap">
@@ -267,12 +328,55 @@ export function CountStockView({ departments }: { departments: Department[] }) {
                           ? "—"
                           : `${diffG > 0 ? "+" : ""}${formatGrams(diffG)}`}
                       </td>
+                      <td className="px-3 py-2">
+                        <Input
+                          disabled={sheet.status !== "draft"}
+                          placeholder={needsReason ? "Required" : "Optional"}
+                          className={cn(
+                            "w-40",
+                            needsReason &&
+                              !reasons[line.id]?.trim() &&
+                              "border-destructive",
+                          )}
+                          value={reasons[line.id] ?? ""}
+                          onChange={(e) =>
+                            setReasons((prev) => ({
+                              ...prev,
+                              [line.id]: e.target.value,
+                            }))
+                          }
+                          onBlur={() => handleBlur(line.id)}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+
+          {serverError && (
+            <p className="text-destructive text-sm">{serverError}</p>
+          )}
+
+          {sheet.status === "draft" && (
+            <Button
+              disabled={isSubmitting}
+              onClick={handleSubmit}
+              className="justify-self-start"
+            >
+              {isSubmitting ? "Submitting…" : "Submit for approval"}
+            </Button>
+          )}
+          {sheet.status === "submitted" && isApprover && (
+            <Button
+              disabled={isApproving}
+              onClick={handleApprove}
+              className="justify-self-start"
+            >
+              {isApproving ? "Approving…" : "Approve"}
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4">
