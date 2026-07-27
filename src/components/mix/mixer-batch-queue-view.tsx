@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, ClipboardList, Scale } from "lucide-react";
 import {
   listDraftBatchesForMixer,
   getMaskedBatchCard,
@@ -10,6 +10,7 @@ import {
 } from "@/app/(app)/mix/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -128,12 +129,29 @@ export function MixerBatchQueueView() {
     );
   }
 
+  const totalOutputG = batches.reduce((sum, b) => sum + b.outputG, 0);
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
         title="Batches to mix"
         description="Weigh each component, tick it off, then confirm."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Batches assigned"
+          value={String(batches.length)}
+          icon={ClipboardList}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Total to mix"
+          value={formatGrams(totalOutputG)}
+          icon={Scale}
+        />
+      </div>
 
       <div className="grid gap-4 md:grid-cols-[260px_1fr]">
         <Card className="h-fit">

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Printer, IndianRupee, ListChecks, Package } from "lucide-react";
 import {
   updatePoLineRate,
   updatePoLineQty,
@@ -10,6 +10,7 @@ import {
 } from "@/app/(app)/buy/orders/[poId]/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusTag } from "@/components/shared/status-tag";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +69,14 @@ export function PoDetailView({
   const [serverError, setServerError] = React.useState<string | null>(null);
 
   const isDraft = detail.status === "draft";
+
+  const totalQtyG = detail.lines.reduce((s, l) => s + l.qtyG, 0);
+  const totalValue = detail.lines.reduce(
+    (s, l) => s + (l.rate != null ? (l.qtyG / 1000) * l.rate : 0),
+    0,
+  );
+  const roundedValue = Math.round(totalValue * 100) / 100;
+  const pricedLineCount = detail.lines.filter((l) => l.rate != null).length;
 
   function flashSaved(lineId: string) {
     setSavedLineIds((prev) => new Set(prev).add(lineId));
@@ -152,6 +161,23 @@ export function PoDetailView({
           </div>
         }
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Order value"
+          value={`₹${roundedValue}`}
+          detail={`${pricedLineCount}/${detail.lines.length} lines rated`}
+          icon={IndianRupee}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard label="Lines" value={String(detail.lines.length)} icon={ListChecks} />
+        <StatCard
+          label="Total quantity"
+          value={formatGrams(totalQtyG)}
+          icon={Package}
+        />
+      </div>
 
       <div className="flex items-center gap-2">
         <StatusTag status={detail.status} />

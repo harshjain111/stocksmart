@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Star, History } from "lucide-react";
+import { Star, History, ListChecks, Clock } from "lucide-react";
 import { rateBatch } from "@/app/(app)/mix/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import {
   DataTable,
@@ -186,10 +187,44 @@ export function PastBatchesView({
     },
   ];
 
+  const ratedBatches = batches.filter((b) => b.rating != null);
+  const avgRating =
+    ratedBatches.length > 0
+      ? (
+          ratedBatches.reduce((sum, b) => sum + (b.rating ?? 0), 0) /
+          ratedBatches.length
+        ).toFixed(1)
+      : "—";
+  const awaitingRating = batches.length - ratedBatches.length;
+
   return (
     <div className="flex flex-col gap-8 p-6">
       <div className="grid gap-4">
         <PageHeader title="Past batches" />
+
+        {batches.length > 0 && (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <StatCard
+              label="Batches confirmed"
+              value={String(batches.length)}
+              icon={History}
+              tone="primary"
+              className="col-span-2 sm:col-span-1"
+            />
+            <StatCard
+              label="Recipes tracked"
+              value={String(scoreboard.length)}
+              icon={ListChecks}
+            />
+            <StatCard label="Avg rating" value={avgRating} icon={Star} />
+            <StatCard
+              label="Awaiting rating"
+              value={String(awaitingRating)}
+              icon={Clock}
+            />
+          </div>
+        )}
+
         {batches.length === 0 ? (
           <EmptyState
             icon={History}

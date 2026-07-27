@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { History } from "lucide-react";
+import { History, Package, PackageCheck, FileText } from "lucide-react";
 import {
   getPurchaseHistory,
   type PurchaseHistoryFilters,
@@ -12,6 +12,7 @@ import {
   DataTable,
   type DataTableColumn,
 } from "@/components/shared/data-table";
+import { StatCard } from "@/components/shared/stat-card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -208,12 +209,46 @@ export function PurchaseHistoryView({
     },
   ];
 
+  const totalOrders = data.bySupplier.reduce((s, x) => s + x.orderCount, 0);
+  const totalOrderedG = data.bySupplier.reduce((s, x) => s + x.totalOrderedG, 0);
+  const totalReceivedG = data.bySupplier.reduce(
+    (s, x) => s + x.totalReceivedG,
+    0,
+  );
+  const receiptCount = data.records.filter((r) => r.type === "receipt").length;
+
   return (
     <div className="grid gap-6 p-6">
       <PageHeader
         title="Purchase history"
         description="Every order and receipt, by supplier and by material, with rate movement over time."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Orders in view"
+          value={String(totalOrders)}
+          detail={`${data.bySupplier.length} supplier${data.bySupplier.length === 1 ? "" : "s"}`}
+          icon={History}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Total ordered"
+          value={formatGrams(totalOrderedG)}
+          icon={Package}
+        />
+        <StatCard
+          label="Total received"
+          value={formatGrams(totalReceivedG)}
+          icon={PackageCheck}
+        />
+        <StatCard
+          label="Receipts (GRNs)"
+          value={String(receiptCount)}
+          icon={FileText}
+        />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="grid gap-1.5">

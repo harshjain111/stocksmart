@@ -1,8 +1,9 @@
 "use client";
 
-import { Scale } from "lucide-react";
+import { Scale, Route, Package, ListChecks } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import {
   DataTable,
   type DataTableColumn,
@@ -151,12 +152,30 @@ export function TransitVarianceView({
     );
   }
 
+  const totalLostG = detail.reduce(
+    (sum, r) => sum + Math.max(r.varianceG, 0),
+    0,
+  );
+
   return (
     <div className="flex flex-col gap-8 p-6">
       <PageHeader
         title="Transit variance"
         description="Dispatched vs received — the third leakage source. Only posted GRNs count."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard
+          label="Lost in transit"
+          value={formatGrams(totalLostG)}
+          icon={Scale}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard label="Routes affected" value={String(byRoute.length)} icon={Route} />
+        <StatCard label="Items affected" value={String(byItem.length)} icon={Package} />
+        <StatCard label="Records" value={String(detail.length)} icon={ListChecks} />
+      </div>
 
       <div className="grid gap-4">
         <h2 className="text-lg font-semibold tracking-tight">By route</h2>

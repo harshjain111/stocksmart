@@ -1,8 +1,9 @@
 "use client";
 
-import { Scale } from "lucide-react";
+import { Scale, Boxes, FlaskConical, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import {
   DataTable,
   type DataTableColumn,
@@ -167,12 +168,43 @@ export function VarianceView({
     );
   }
 
+  const totalVarianceG = detail.reduce((sum, r) => sum + r.varianceG, 0);
+  const batchesAffected = new Set(detail.map((r) => r.batchNo)).size;
+  const materialsAffected = new Set(
+    detail.map((r) => r.materialCode ?? r.materialName),
+  ).size;
+
   return (
     <div className="flex flex-col gap-8 p-6">
       <PageHeader
         title="Mixing variance"
         description="Planned vs actual grams — over-pouring and spillage, one of the four leakage sources."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Total variance"
+          value={`${totalVarianceG > 0 ? "+" : ""}${formatGrams(totalVarianceG)}`}
+          icon={Scale}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Batches affected"
+          value={String(batchesAffected)}
+          icon={Boxes}
+        />
+        <StatCard
+          label="Materials affected"
+          value={String(materialsAffected)}
+          icon={FlaskConical}
+        />
+        <StatCard
+          label="Weeks tracked"
+          value={String(byWeek.length)}
+          icon={CalendarDays}
+        />
+      </div>
 
       <div className="grid gap-4">
         <h2 className="text-lg font-semibold tracking-tight">By week</h2>

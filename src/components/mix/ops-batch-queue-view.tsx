@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { ClipboardList, Scale } from "lucide-react";
 import {
   listDraftBatchesForOps,
   getOpsBatchCard,
   confirmBatch,
 } from "@/app/(app)/mix/actions";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -108,11 +110,29 @@ export function OpsBatchQueueView() {
   if (loadingList) return <Skeleton className="h-24 w-full" />;
   if (batches.length === 0) return null;
 
+  const totalOutputG = batches.reduce((sum, b) => sum + b.outputG, 0);
+
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-4">
       <h2 className="text-lg font-semibold tracking-tight">
         Drafts waiting to be confirmed
       </h2>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Drafts waiting"
+          value={String(batches.length)}
+          icon={ClipboardList}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Total quantity"
+          value={formatGrams(totalOutputG)}
+          icon={Scale}
+        />
+      </div>
+
       <div className="grid gap-4 md:grid-cols-[260px_1fr]">
         <Card className="h-fit">
           <CardContent className="grid gap-1 p-2">

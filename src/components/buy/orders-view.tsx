@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingCart, Plus, Trash2 } from "lucide-react";
+import { ShoppingCart, Clock, Truck, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import {
   getOrders,
   createManualOrder,
@@ -12,6 +12,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
+import { StatCard } from "@/components/shared/stat-card";
 import {
   DataTable,
   type DataTableColumn,
@@ -136,6 +137,21 @@ export function OrdersView({
     },
   ];
 
+  const statusCounts = React.useMemo(() => {
+    const draft = rows.filter((r) => r.status === "draft").length;
+    const sent = rows.filter((r) => r.status === "sent").length;
+    const open = rows.filter(
+      (r) =>
+        r.status === "draft" ||
+        r.status === "sent" ||
+        r.status === "partially_received",
+    ).length;
+    const received = rows.filter(
+      (r) => r.status === "received" || r.status === "closed",
+    ).length;
+    return { draft, sent, open, received };
+  }, [rows]);
+
   return (
     <div className="grid gap-6 p-6">
       <PageHeader
@@ -150,6 +166,24 @@ export function OrdersView({
           )
         }
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Open orders"
+          value={String(statusCounts.open)}
+          detail={`of ${rows.length} shown`}
+          icon={ShoppingCart}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard label="Draft" value={String(statusCounts.draft)} icon={Clock} />
+        <StatCard label="Sent" value={String(statusCounts.sent)} icon={Truck} />
+        <StatCard
+          label="Received"
+          value={String(statusCounts.received)}
+          icon={CheckCircle2}
+        />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="grid gap-1.5">

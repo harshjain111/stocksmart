@@ -10,6 +10,8 @@ import {
   Pencil,
   Archive,
   Building2,
+  Layers,
+  Blend,
 } from "lucide-react";
 import {
   createBranchSchema,
@@ -24,6 +26,7 @@ import {
   updateDepartment,
 } from "@/app/(app)/setup/branches/actions";
 import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import {
   DataTable,
@@ -113,6 +116,7 @@ export function BranchesDepartmentsView({
   }
 
   const profileNameById = new Map(profiles.map((p) => [p.id, p.full_name]));
+  const canMixCount = departments.filter((d) => d.can_mix).length;
 
   return (
     <div className="grid gap-6">
@@ -125,6 +129,28 @@ export function BranchesDepartmentsView({
           </Button>
         }
       />
+
+      {branches.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard
+            label="Branches"
+            value={String(branches.length)}
+            icon={Building2}
+            tone="primary"
+          />
+          <StatCard
+            label="Departments"
+            value={String(departments.length)}
+            icon={Layers}
+          />
+          <StatCard
+            label="Can mix"
+            value={String(canMixCount)}
+            detail="departments that mix flavours"
+            icon={Blend}
+          />
+        </div>
+      )}
 
       {branches.length === 0 ? (
         <EmptyState

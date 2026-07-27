@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, FileEdit, Plus, Send, Trash2 } from "lucide-react";
 import {
   getAvailableItems,
   createRequisition,
@@ -14,6 +14,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,70 +118,97 @@ export function RequisitionsMineView({
     openDetail(id);
   }
 
+  const draftCount = requisitions.filter((r) => r.status === "draft").length;
+  const submittedCount = requisitions.filter(
+    (r) => r.status === "submitted",
+  ).length;
+
   return (
-    <div className="grid gap-6 p-6 lg:grid-cols-[320px_1fr]">
-      <div className="grid gap-4 lg:order-1">
-        <PageHeader
-          title="My requisitions"
-          action={
-            <Button size="sm" onClick={startCompose}>
-              <Plus className="size-4" />
-              New requisition
-            </Button>
-          }
-        />
-        <div className="grid gap-2">
-          {requisitions.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Nothing raised yet — start a new requisition.
-            </p>
-          ) : (
-            requisitions.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => openDetail(r.id)}
-                className={cn(
-                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm",
-                  selectedId === r.id && view === "detail" && "border-primary",
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{r.reqNo}</span>
-                  <StatusTag status={r.status} />
-                </div>
-                <div className="text-muted-foreground flex items-center justify-between text-xs">
-                  <span>
-                    {r.lineCount} item{r.lineCount === 1 ? "" : "s"}
-                  </span>
-                  <span>
-                    Needed {new Date(r.neededBy).toLocaleDateString("en-IN")}
-                  </span>
-                </div>
-              </button>
-            ))
+    <div className="grid gap-6 p-6">
+      {view === "list" && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <StatCard
+            label="My requisitions"
+            value={String(requisitions.length)}
+            icon={ClipboardList}
+            tone="primary"
+            className="col-span-2 sm:col-span-1"
+          />
+          <StatCard label="Draft" value={String(draftCount)} icon={FileEdit} />
+          <StatCard
+            label="Submitted"
+            value={String(submittedCount)}
+            icon={Send}
+          />
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="grid gap-4 lg:order-1">
+          <PageHeader
+            title="My requisitions"
+            action={
+              <Button size="sm" onClick={startCompose}>
+                <Plus className="size-4" />
+                New requisition
+              </Button>
+            }
+          />
+          <div className="grid gap-2">
+            {requisitions.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Nothing raised yet — start a new requisition.
+              </p>
+            ) : (
+              requisitions.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => openDetail(r.id)}
+                  className={cn(
+                    "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+                    selectedId === r.id &&
+                      view === "detail" &&
+                      "border-primary",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{r.reqNo}</span>
+                    <StatusTag status={r.status} />
+                  </div>
+                  <div className="text-muted-foreground flex items-center justify-between text-xs">
+                    <span>
+                      {r.lineCount} item{r.lineCount === 1 ? "" : "s"}
+                    </span>
+                    <span>
+                      Needed {new Date(r.neededBy).toLocaleDateString("en-IN")}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="lg:order-2">
+          {view === "compose" && (
+            <ComposeRequisition
+              departments={departments}
+              onCancel={() => setView(selectedId ? "detail" : "list")}
+              onCreated={onCreated}
+            />
+          )}
+          {view === "detail" && selectedId && (
+            <RequisitionDetailPanel
+              requisitionId={selectedId}
+              onChange={() => router.refresh()}
+            />
+          )}
+          {view === "list" && (
+            <div className="text-muted-foreground flex h-full items-center justify-center rounded-lg border border-dashed p-16 text-center text-sm">
+              Select a requisition from the list, or start a new one.
+            </div>
           )}
         </div>
-      </div>
-
-      <div className="lg:order-2">
-        {view === "compose" && (
-          <ComposeRequisition
-            departments={departments}
-            onCancel={() => setView(selectedId ? "detail" : "list")}
-            onCreated={onCreated}
-          />
-        )}
-        {view === "detail" && selectedId && (
-          <RequisitionDetailPanel
-            requisitionId={selectedId}
-            onChange={() => router.refresh()}
-          />
-        )}
-        {view === "list" && (
-          <div className="text-muted-foreground flex h-full items-center justify-center rounded-lg border border-dashed p-16 text-center text-sm">
-            Select a requisition from the list, or start a new one.
-          </div>
-        )}
       </div>
     </div>
   );

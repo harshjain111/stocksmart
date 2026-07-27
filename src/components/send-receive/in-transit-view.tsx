@@ -1,7 +1,8 @@
-import { Truck } from "lucide-react";
+import { Truck, Clock, Route } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import { cn } from "@/lib/utils";
 import type { InTransitTransfer } from "@/app/(app)/send-receive/in-transit/actions";
@@ -34,6 +35,9 @@ export function InTransitView({
     const key = `${t.fromDepartmentName} → ${t.toDepartmentName}`;
     routes.set(key, [...(routes.get(key) ?? []), t]);
   }
+  const ageingCount = transfers.filter(
+    (t) => t.ageDays > AGEING_THRESHOLD_DAYS,
+  ).length;
 
   return (
     <div className="grid gap-6 p-6">
@@ -41,6 +45,19 @@ export function InTransitView({
         title="In transit"
         description="Everything dispatched and not yet received, grouped by route — ageing past 3 days is flagged."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Ageing past 3 days"
+          value={String(ageingCount)}
+          detail="needs a follow-up"
+          icon={Clock}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard label="In transit" value={String(transfers.length)} icon={Truck} />
+        <StatCard label="Routes" value={String(routes.size)} icon={Route} />
+      </div>
 
       <div className="grid gap-6">
         {Array.from(routes.entries()).map(([route, routeTransfers]) => (

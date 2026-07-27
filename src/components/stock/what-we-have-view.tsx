@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Package, FlaskConical } from "lucide-react";
+import { Package, FlaskConical, TrendingDown, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import {
   DataTable,
   type DataTableColumn,
@@ -83,6 +84,17 @@ export function WhatWeHaveView({
 
   const mixedDepartments = scopedDepartments.filter((d) => d.holds_mixed);
 
+  const belowParCount = flavours.reduce(
+    (count, f) =>
+      count +
+      mixedDepartments.filter((d) => {
+        const qtyG = balanceByKey.get(`${d.id}|flavour|${f.id}`) ?? 0;
+        const parG = parByKey.get(`${d.id}|${f.id}`);
+        return parG != null && qtyG < parG;
+      }).length,
+    0,
+  );
+
   const rawColumns: DataTableColumn<(typeof rawRows)[number]>[] = [
     {
       key: "material",
@@ -114,6 +126,32 @@ export function WhatWeHaveView({
         title="What we have"
         description="Raw materials and mixed flavour stock, by department."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Below par"
+          value={String(belowParCount)}
+          detail="flavour × department combinations"
+          icon={TrendingDown}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Raw materials tracked"
+          value={String(rawMaterials.length)}
+          icon={Package}
+        />
+        <StatCard
+          label="Mixed flavours tracked"
+          value={String(flavours.length)}
+          icon={FlaskConical}
+        />
+        <StatCard
+          label="Departments in view"
+          value={String(scopedDepartments.length)}
+          icon={Building2}
+        />
+      </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-1 rounded-lg border p-1">

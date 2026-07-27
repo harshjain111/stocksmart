@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { PackageCheck } from "lucide-react";
+import { PackageCheck, Truck, ShoppingCart } from "lucide-react";
 import {
   getOrCreateGrnForTransfer,
   getOrCreateGrnForOrder,
@@ -15,6 +15,7 @@ import {
 } from "@/app/(app)/send-receive/receive/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,22 @@ export function ReceiveView({
       <div className="grid gap-4">
         <PageHeader title="Receive" />
 
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            label="Awaiting receipt"
+            value={String(transfers.length + orders.length)}
+            icon={PackageCheck}
+            tone="primary"
+            className="col-span-2"
+          />
+          <StatCard label="Transfers" value={String(transfers.length)} icon={Truck} />
+          <StatCard
+            label="Purchase orders"
+            value={String(orders.length)}
+            icon={ShoppingCart}
+          />
+        </div>
+
         {transfers.length > 0 && (
           <div className="grid gap-2">
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
@@ -128,7 +145,7 @@ export function ReceiveView({
                 onClick={() => openTransfer(t.id, t.existingGrnId)}
                 disabled={openingId === t.id}
                 className={cn(
-                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm",
+                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
                   selectedGrnId === t.existingGrnId &&
                     t.existingGrnId &&
                     "border-primary",
@@ -165,7 +182,7 @@ export function ReceiveView({
                 onClick={() => openOrder(o.id, o.existingGrnId)}
                 disabled={openingId === o.id}
                 className={cn(
-                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm",
+                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
                   selectedGrnId === o.existingGrnId &&
                     o.existingGrnId &&
                     "border-primary",

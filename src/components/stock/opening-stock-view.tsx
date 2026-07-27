@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Lock, PackageOpen } from "lucide-react";
+import { Lock, PackageOpen, Package, FlaskConical, Building2 } from "lucide-react";
 import {
   getDepartmentOpeningData,
   submitOpeningStock,
 } from "@/app/(app)/stock/opening/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -150,6 +151,32 @@ export function OpeningStockView({
         title="Opening stock"
         description="One-time starting quantities per department. Locks once submitted."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Items to open"
+          value={String(rawMaterials.length + flavours.length)}
+          detail="raw materials & flavours"
+          icon={PackageOpen}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Raw materials"
+          value={String(rawMaterials.length)}
+          icon={Package}
+        />
+        <StatCard
+          label="Mixed flavours"
+          value={String(flavours.length)}
+          icon={FlaskConical}
+        />
+        <StatCard
+          label="Departments"
+          value={String(departments.length)}
+          icon={Building2}
+        />
+      </div>
 
       <Select
         items={departments.map((d) => ({

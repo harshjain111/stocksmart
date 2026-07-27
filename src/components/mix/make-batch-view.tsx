@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { TriangleAlert, FlaskConical } from "lucide-react";
+import { TriangleAlert, FlaskConical, Scale, ListChecks, Percent } from "lucide-react";
 import {
   getRecipeVersionForBatch,
   createDraftBatch,
 } from "@/app/(app)/mix/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -197,6 +198,29 @@ export function MakeBatchView({
         title="Make a batch"
         description="Pick a flavour and version, enter the output, then weigh and tick each component."
       />
+
+      {cardLines.length > 0 && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <StatCard
+            label="Running total"
+            value={formatGrams(runningTotalG)}
+            detail={`incl. ${wastagePct ?? 0}% wastage`}
+            icon={Scale}
+            tone="primary"
+            className="col-span-2 sm:col-span-1"
+          />
+          <StatCard
+            label="Components to weigh"
+            value={String(cardLines.length)}
+            icon={ListChecks}
+          />
+          <StatCard
+            label="Wastage allowance"
+            value={`${wastagePct ?? 0}%`}
+            icon={Percent}
+          />
+        </div>
+      )}
 
       <Card>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

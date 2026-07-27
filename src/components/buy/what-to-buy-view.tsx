@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ShoppingCart, Plus, Trash2 } from "lucide-react";
+import { ShoppingCart, ListChecks, Package, ClipboardList, Plus, Trash2 } from "lucide-react";
 import {
   getWhatToBuyData,
   createDraftOrders,
@@ -11,6 +11,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DataTable } from "@/components/shared/data-table";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,12 +113,49 @@ export function WhatToBuyView({
     load();
   }
 
+  const totalShortfallLines = groups.reduce(
+    (sum, g) => sum + g.lines.length,
+    0,
+  );
+  const totalBuyG = groups.reduce(
+    (sum, g) => sum + g.lines.reduce((s, l) => s + l.buyG, 0),
+    0,
+  );
+
   return (
     <div className="grid gap-6 p-6">
       <PageHeader
         title="What to buy"
         description="Approved requisitions, manual entries and par top-up, grouped into draft orders by supplier."
       />
+
+      {!loading && groups.length > 0 && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <StatCard
+            label="Suppliers to order from"
+            value={String(groups.length)}
+            detail={`${totalShortfallLines} shortfall line${totalShortfallLines === 1 ? "" : "s"}`}
+            icon={ShoppingCart}
+            tone="primary"
+            className="col-span-2 sm:col-span-1"
+          />
+          <StatCard
+            label="Shortfall lines"
+            value={String(totalShortfallLines)}
+            icon={ListChecks}
+          />
+          <StatCard
+            label="Total to buy"
+            value={formatGrams(totalBuyG)}
+            icon={Package}
+          />
+          <StatCard
+            label="Requisition lines"
+            value={String(requisitionLineCount)}
+            icon={ClipboardList}
+          />
+        </div>
+      )}
 
       <ManualEntryComposer
         branches={branches}

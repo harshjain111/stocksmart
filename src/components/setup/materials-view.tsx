@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Pencil, History, Boxes } from "lucide-react";
+import { Plus, Pencil, History, Boxes, AlertTriangle } from "lucide-react";
 import {
   addSupplierRateSchema,
   createMaterialSchema,
@@ -17,6 +17,7 @@ import {
   updateMaterial,
 } from "@/app/(app)/setup/materials/actions";
 import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import {
   DataTable,
@@ -82,6 +83,10 @@ export function MaterialsView({
   const [historyTarget, setHistoryTarget] = React.useState<Material | null>(
     null,
   );
+
+  const noSupplierCount = materials.filter(
+    (m) => m.is_active && !m.default_supplier_id,
+  ).length;
 
   const supplierNameById = new Map(suppliers.map((s) => [s.id, s.name]));
   // rates is ordered newest-first from the query, so the first match per
@@ -169,6 +174,23 @@ export function MaterialsView({
           </Button>
         }
       />
+
+      {materials.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <StatCard
+            label="Materials tracked"
+            value={String(materials.length)}
+            icon={Boxes}
+            tone="primary"
+          />
+          <StatCard
+            label="No default supplier"
+            value={String(noSupplierCount)}
+            detail="active materials missing one"
+            icon={AlertTriangle}
+          />
+        </div>
+      )}
 
       {materials.length === 0 ? (
         <EmptyState

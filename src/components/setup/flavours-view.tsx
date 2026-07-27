@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Pencil, Droplet } from "lucide-react";
+import { Plus, Pencil, Droplet, AlertTriangle } from "lucide-react";
 import {
   createFlavourSchema,
   type CreateFlavourInput,
@@ -14,6 +14,7 @@ import {
   updateFlavour,
 } from "@/app/(app)/setup/materials/flavour-actions";
 import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import {
   DataTable,
@@ -43,6 +44,10 @@ export function FlavoursView({ flavours }: { flavours: Flavour[] }) {
   const [dialogTarget, setDialogTarget] = React.useState<
     Flavour | "new" | null
   >(null);
+
+  const noRecipeCount = flavours.filter(
+    (f) => f.is_active && !f.current_version_id,
+  ).length;
 
   const columns: DataTableColumn<Flavour>[] = [
     { key: "code", header: "Code", render: (f) => f.code ?? "—" },
@@ -105,6 +110,23 @@ export function FlavoursView({ flavours }: { flavours: Flavour[] }) {
           </Button>
         }
       />
+
+      {flavours.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <StatCard
+            label="Flavours"
+            value={String(flavours.length)}
+            icon={Droplet}
+            tone="primary"
+          />
+          <StatCard
+            label="No recipe yet"
+            value={String(noRecipeCount)}
+            detail="active flavours without a version"
+            icon={AlertTriangle}
+          />
+        </div>
+      )}
 
       {flavours.length === 0 ? (
         <EmptyState

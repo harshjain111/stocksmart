@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Truck, Plus } from "lucide-react";
+import { Truck, Plus, Send, Package } from "lucide-react";
 import {
   getAvailableItemsAtDepartment,
   createAdHocTransfer,
@@ -12,6 +12,7 @@ import {
 } from "@/app/(app)/send-receive/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,8 @@ export function SendOutView({
     );
   }
 
+  const totalItemsQueued = transfers.reduce((sum, t) => sum + t.lineCount, 0);
+
   return (
     <div className="grid gap-6 p-6 lg:grid-cols-[340px_1fr]">
       <div className="grid gap-4">
@@ -81,6 +84,19 @@ export function SendOutView({
             </Button>
           }
         />
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            label="Ready to send"
+            value={String(transfers.length)}
+            icon={Send}
+            tone="primary"
+          />
+          <StatCard
+            label="Items queued"
+            value={String(totalItemsQueued)}
+            icon={Package}
+          />
+        </div>
         <div className="grid gap-2">
           {transfers.length === 0 ? (
             <p className="text-muted-foreground text-sm">
@@ -95,7 +111,7 @@ export function SendOutView({
                   setView("detail");
                 }}
                 className={cn(
-                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm",
+                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
                   selectedId === t.id && view === "detail" && "border-primary",
                 )}
               >

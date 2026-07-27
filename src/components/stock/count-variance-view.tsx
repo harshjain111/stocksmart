@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Scale } from "lucide-react";
+import { Scale, Building2, Package, TrendingUpDown } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import {
   DataTable,
   type DataTableColumn,
@@ -161,12 +162,43 @@ export function CountVarianceView({
     );
   }
 
+  const biggestVarianceG = detail.reduce(
+    (max, r) => (Math.abs(r.varianceG) > Math.abs(max) ? r.varianceG : max),
+    0,
+  );
+
   return (
     <div className="flex flex-col gap-8 p-6">
       <PageHeader
         title="Count variance"
         description="System vs physical — the fourth leakage source. Only approved counts count."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Variance lines"
+          value={String(detail.length)}
+          icon={Scale}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Departments affected"
+          value={String(byDepartment.length)}
+          icon={Building2}
+        />
+        <StatCard
+          label="Items affected"
+          value={String(byItem.length)}
+          icon={Package}
+        />
+        <StatCard
+          label="Biggest single variance"
+          value={formatGrams(Math.abs(biggestVarianceG))}
+          detail={biggestVarianceG > 0 ? "over count" : "short"}
+          icon={TrendingUpDown}
+        />
+      </div>
 
       <div className="grid gap-4">
         <h2 className="text-lg font-semibold tracking-tight">By department</h2>

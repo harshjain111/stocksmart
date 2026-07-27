@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, ListChecks } from "lucide-react";
 import {
   getApprovalDetail,
   saveLineDecision,
@@ -11,6 +11,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
+import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,49 +98,79 @@ export function RequisitionsApproveView({
     );
   }
 
+  const linesToDecide = requisitions.reduce(
+    (sum, r) => sum + (r.lineCount - r.decidedCount),
+    0,
+  );
+  const readyToApprove = requisitions.filter(
+    (r) => r.lineCount > 0 && r.decidedCount === r.lineCount,
+  ).length;
+
   return (
-    <div className="grid gap-6 p-6 lg:grid-cols-[360px_1fr]">
-      <div className="grid gap-4">
-        <PageHeader title="Requisitions to approve" />
-        <div className="grid gap-2">
-          {requisitions.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => setSelectedId(r.id)}
-              className={cn(
-                "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm",
-                selectedId === r.id && "border-primary",
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{r.reqNo}</span>
-                <span className="text-muted-foreground text-xs">
-                  {r.decidedCount}/{r.lineCount} decided
-                </span>
-              </div>
-              <div className="text-muted-foreground text-xs">
-                {r.departmentName}
-                {r.branchName ? ` · ${r.branchName}` : ""}
-              </div>
-              <div className="text-muted-foreground text-xs">
-                Needed {new Date(r.neededBy).toLocaleDateString("en-IN")}
-              </div>
-            </button>
-          ))}
-        </div>
+    <div className="grid gap-6 p-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Waiting on you"
+          value={String(requisitions.length)}
+          icon={ClipboardCheck}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Lines to decide"
+          value={String(linesToDecide)}
+          icon={ListChecks}
+        />
+        <StatCard
+          label="Ready to approve"
+          value={String(readyToApprove)}
+          icon={CheckCircle2}
+        />
       </div>
 
-      <div>
-        {selectedId ? (
-          <ApprovalDetailPanel
-            requisitionId={selectedId}
-            onChange={() => router.refresh()}
-          />
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center rounded-lg border border-dashed p-16 text-center text-sm">
-            Select a requisition from the list to review its lines.
+      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+        <div className="grid gap-4">
+          <PageHeader title="Requisitions to approve" />
+          <div className="grid gap-2">
+            {requisitions.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => setSelectedId(r.id)}
+                className={cn(
+                  "hover:bg-muted flex flex-col gap-1 rounded-lg border p-3 text-left text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+                  selectedId === r.id && "border-primary",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{r.reqNo}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {r.decidedCount}/{r.lineCount} decided
+                  </span>
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  {r.departmentName}
+                  {r.branchName ? ` · ${r.branchName}` : ""}
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  Needed {new Date(r.neededBy).toLocaleDateString("en-IN")}
+                </div>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+
+        <div>
+          {selectedId ? (
+            <ApprovalDetailPanel
+              requisitionId={selectedId}
+              onChange={() => router.refresh()}
+            />
+          ) : (
+            <div className="text-muted-foreground flex h-full items-center justify-center rounded-lg border border-dashed p-16 text-center text-sm">
+              Select a requisition from the list to review its lines.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

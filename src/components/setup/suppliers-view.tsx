@@ -3,7 +3,14 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Pencil, Archive, Search, Truck } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Archive,
+  Search,
+  Truck,
+  CheckCircle2,
+} from "lucide-react";
 import {
   createSupplierSchema,
   type CreateSupplierInput,
@@ -15,6 +22,7 @@ import {
   updateSupplier,
 } from "@/app/(app)/setup/suppliers/actions";
 import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import {
   DataTable,
@@ -69,6 +77,8 @@ export function SuppliersView({ suppliers }: { suppliers: Supplier[] }) {
   const [archiveTarget, setArchiveTarget] = React.useState<Supplier | null>(
     null,
   );
+
+  const activeCount = suppliers.filter((s) => s.is_active).length;
 
   const filtered = suppliers.filter((s) => {
     if (statusFilter === "active" && !s.is_active) return false;
@@ -152,6 +162,23 @@ export function SuppliersView({ suppliers }: { suppliers: Supplier[] }) {
           </Button>
         }
       />
+
+      {suppliers.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <StatCard
+            label="Suppliers"
+            value={String(suppliers.length)}
+            icon={Truck}
+            tone="primary"
+          />
+          <StatCard
+            label="Active"
+            value={String(activeCount)}
+            detail={`${suppliers.length - activeCount} archived`}
+            icon={CheckCircle2}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative max-w-sm flex-1">

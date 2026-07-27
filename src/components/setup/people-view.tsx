@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Pencil, UserX, UsersRound } from "lucide-react";
+import { Plus, Pencil, UserX, UsersRound, CheckCircle2 } from "lucide-react";
 import {
   inviteUserSchema,
   updateUserSchema,
@@ -16,6 +16,7 @@ import {
   updateUser,
 } from "@/app/(app)/setup/people/actions";
 import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import {
   DataTable,
@@ -92,6 +93,7 @@ export function PeopleView({
 
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   const deptNameById = new Map(departments.map((d) => [d.id, d.name]));
+  const activeCount = people.filter((p) => p.is_active).length;
 
   const columns: DataTableColumn<Person>[] = [
     {
@@ -178,6 +180,23 @@ export function PeopleView({
           </Button>
         }
       />
+
+      {people.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <StatCard
+            label="People"
+            value={String(people.length)}
+            icon={UsersRound}
+            tone="primary"
+          />
+          <StatCard
+            label="Active"
+            value={String(activeCount)}
+            detail={`${people.length - activeCount} deactivated`}
+            icon={CheckCircle2}
+          />
+        </div>
+      )}
 
       {people.length === 0 ? (
         <EmptyState

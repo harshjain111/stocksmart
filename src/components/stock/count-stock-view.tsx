@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, ListChecks, AlertTriangle } from "lucide-react";
 import {
   getActiveCountForDepartment,
   generateCountSheet,
@@ -12,6 +12,7 @@ import {
 } from "@/app/(app)/stock/count/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -238,6 +239,28 @@ export function CountStockView({
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">{sheet.countNo}</p>
             <StatusTag status={sheet.status} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Items counted"
+              value={`${sheet.lines.filter((l) => (values[l.id] ?? "").trim() !== "").length}/${sheet.lines.length}`}
+              icon={ListChecks}
+              tone="primary"
+              className="col-span-2 sm:col-span-1"
+            />
+            <StatCard
+              label="Flagged differences"
+              value={String(
+                sheet.lines.filter((l) => {
+                  const value = values[l.id] ?? "";
+                  if (value.trim() === "") return false;
+                  const countedG = Math.round((parseFloat(value) || 0) * 1000);
+                  return countedG - l.systemQtyG !== 0;
+                }).length,
+              )}
+              icon={AlertTriangle}
+            />
           </div>
 
           {sheet.status === "submitted" && !isApprover && (

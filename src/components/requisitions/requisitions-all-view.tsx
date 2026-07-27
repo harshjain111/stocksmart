@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ListChecks } from "lucide-react";
+import { CheckCircle2, ListChecks, PackageCheck, Send } from "lucide-react";
 import {
   getAllRequisitions,
   getRequisitionTimeline,
@@ -10,6 +10,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
+import { StatCard } from "@/components/shared/stat-card";
 import {
   DataTable,
   type DataTableColumn,
@@ -145,12 +146,41 @@ export function RequisitionsAllView({
     },
   ];
 
+  const submittedCount = rows.filter((r) => r.status === "submitted").length;
+  const fulfillingCount = rows.filter((r) => r.status === "fulfilling").length;
+  const closedCount = rows.filter((r) => r.status === "closed").length;
+
   return (
     <div className="grid gap-6 p-6">
       <PageHeader
         title="All requisitions"
         description="Filter by branch, department, status and date — every requisition, whatever its state."
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard
+          label="Requisitions shown"
+          value={String(rows.length)}
+          icon={ListChecks}
+          tone="primary"
+          className="col-span-2 sm:col-span-1"
+        />
+        <StatCard
+          label="Submitted"
+          value={String(submittedCount)}
+          icon={Send}
+        />
+        <StatCard
+          label="Fulfilling"
+          value={String(fulfillingCount)}
+          icon={PackageCheck}
+        />
+        <StatCard
+          label="Closed"
+          value={String(closedCount)}
+          icon={CheckCircle2}
+        />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {isAdmin && (
