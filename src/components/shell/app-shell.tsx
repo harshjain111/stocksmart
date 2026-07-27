@@ -12,9 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="print:hidden">
           <TopBar />
         </div>
-        <main className="animate-in fade-in-0 slide-in-from-bottom-1 flex-1 duration-300">
-          {children}
-        </main>
+        <main className="flex-1">{children}</main>
       </div>
     </div>
   );

@@ -10,7 +10,9 @@ import {
   type UpdateFlavourInput,
 } from "@/lib/validation/flavours";
 
-type ActionResult = { success: true } | { success: false; error: string };
+type ActionResult<T = undefined> =
+  | { success: true; data?: T }
+  | { success: false; error: string };
 
 async function requireFlavourAccess() {
   const session = await getSession();
@@ -24,7 +26,7 @@ async function requireFlavourAccess() {
 // Recipes screen (phase 2), which sets current_version_id once a version exists.
 export async function createFlavour(
   input: CreateFlavourInput,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ id: string }>> {
   const session = await requireFlavourAccess();
   if (!session) return { success: false, error: "Access required." };
 
@@ -34,15 +36,22 @@ export async function createFlavour(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("flavours").insert({
-    name: parsed.data.name,
-    created_by: session.userId,
-  });
+  const { data: flavour, error } = await supabase
+    .from("flavours")
+    .insert({
+      name: parsed.data.name,
+      created_by: session.userId,
+    })
+    .select("id")
+    .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error || !flavour) {
+    return { success: false, error: error?.message ?? "Could not create flavour." };
+  }
 
   revalidatePath("/setup/materials");
-  return { success: true };
+  revalidatePath("/recipes");
+  return { success: true, data: { id: flavour.id } };
 }
 
 export async function updateFlavour(

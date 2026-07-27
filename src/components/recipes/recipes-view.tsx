@@ -2,11 +2,26 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical, Pencil, RotateCcw, Search } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  FlaskConical,
+  Pencil,
+  RotateCcw,
+  Search,
+  Plus,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import {
   getVersionDetail,
   rollbackRecipeVersion,
 } from "@/app/(app)/recipes/actions";
+import { createFlavour } from "@/app/(app)/setup/materials/flavour-actions";
+import {
+  createFlavourSchema,
+  type CreateFlavourInput,
+} from "@/lib/validation/flavours";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusTag } from "@/components/shared/status-tag";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -15,6 +30,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { NewVersionDialog } from "@/components/recipes/new-version-dialog";
 
@@ -86,8 +110,13 @@ export function RecipesView({
   const [detail, setDetail] = React.useState<VersionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = React.useState(false);
   const [newVersionOpen, setNewVersionOpen] = React.useState(false);
+  const [newFlavourOpen, setNewFlavourOpen] = React.useState(false);
+  const [archivedOpen, setArchivedOpen] = React.useState(false);
   const [rollbackTarget, setRollbackTarget] =
     React.useState<VersionSummary | null>(null);
+  const [pendingSelectFlavourId, setPendingSelectFlavourId] = React.useState<
+    string | null
+  >(null);
 
   const filteredFlavours = flavours.filter((f) => {
     const q = search.trim().toLowerCase();
@@ -110,14 +139,14 @@ export function RecipesView({
     (v) => v.id === selectedVersionId,
   );
 
-  async function selectVersion(versionId: string) {
+  const selectVersion = React.useCallback(async (versionId: string) => {
     setSelectedVersionId(versionId);
     setDetail(null);
     setLoadingDetail(true);
     const result = await getVersionDetail(versionId);
     setLoadingDetail(false);
     if (result.success) setDetail(result.data);
-  }
+  }, []);
 
   function selectFlavour(flavourId: string) {
     setSelectedFlavourId(flavourId);
@@ -125,7 +154,29 @@ export function RecipesView({
     setDetail(null);
   }
 
-  if (flavours.length === 0) {
+  // Land straight on the recipe instead of an empty panel — the current
+  // version if there is one, otherwise the newest.
+  React.useEffect(() => {
+    if (selectedVersionId) return;
+    if (flavourVersions.length === 0) return;
+    const target =
+      flavourVersions.find((v) => v.status === "current") ??
+      flavourVersions[0];
+    selectVersion(target.id);
+  }, [flavourVersions, selectedVersionId, selectVersion]);
+
+  // After a newly-created flavour comes back through props (post
+  // router.refresh()), select it automatically.
+  React.useEffect(() => {
+    if (!pendingSelectFlavourId) return;
+    const found = flavours.find((f) => f.id === pendingSelectFlavourId);
+    if (found) {
+      selectFlavour(found.id);
+      setPendingSelectFlavourId(null);
+    }
+  }, [flavours, pendingSelectFlavourId]);
+
+  if (flavours.length === 0 && !canCreateVersion) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <PageHeader title="Recipes" />
@@ -143,178 +194,211 @@ export function RecipesView({
       <PageHeader
         title="Recipes"
         description="Versions are frozen the moment they're saved — there is no edit path, only a new version."
+        action={
+          canCreateVersion && (
+            <Button variant="outline" onClick={() => setNewFlavourOpen(true)}>
+              <Plus /> New flavour
+            </Button>
+          )
+        }
       />
 
-      <div className="grid gap-4 md:grid-cols-[260px_1fr]">
-        <div className="grid gap-3">
-          <div className="relative">
-            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-            <Input
-              placeholder="Search flavours…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
+      {flavours.length === 0 ? (
+        <EmptyState
+          icon={FlaskConical}
+          title="No flavours yet"
+          description="Add your first flavour, then give it a recipe."
+          actionLabel="New flavour"
+          onAction={() => setNewFlavourOpen(true)}
+        />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-[260px_1fr]">
+          <div className="grid gap-3">
+            <div className="relative">
+              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+              <Input
+                placeholder="Search flavours…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            <Card className="h-fit max-h-[calc(100vh-16rem)] overflow-y-auto">
+              <CardContent className="grid gap-1 p-2">
+                {filteredFlavours.length === 0 && (
+                  <p className="text-muted-foreground p-3 text-sm">
+                    No flavours match &ldquo;{search}&rdquo;.
+                  </p>
+                )}
+                {activeFlavours.map((f) => (
+                  <FlavourRow
+                    key={f.id}
+                    flavour={f}
+                    selected={f.id === selectedFlavourId}
+                    onSelect={() => selectFlavour(f.id)}
+                  />
+                ))}
+                {archivedFlavours.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setArchivedOpen((v) => !v)}
+                      className="text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1 px-3 py-1 text-xs font-medium tracking-wide uppercase"
+                    >
+                      {archivedOpen ? (
+                        <ChevronDown className="size-3.5" />
+                      ) : (
+                        <ChevronRight className="size-3.5" />
+                      )}
+                      Archived ({archivedFlavours.length})
+                    </button>
+                    {archivedOpen &&
+                      archivedFlavours.map((f) => (
+                        <FlavourRow
+                          key={f.id}
+                          flavour={f}
+                          selected={f.id === selectedFlavourId}
+                          onSelect={() => selectFlavour(f.id)}
+                        />
+                      ))}
+                  </>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
-          <Card className="h-fit max-h-[calc(100vh-16rem)] overflow-y-auto">
-            <CardContent className="grid gap-1 p-2">
-              {filteredFlavours.length === 0 && (
-                <p className="text-muted-foreground p-3 text-sm">
-                  No flavours match &ldquo;{search}&rdquo;.
-                </p>
-              )}
-              {activeFlavours.map((f) => (
-                <FlavourRow
-                  key={f.id}
-                  flavour={f}
-                  selected={f.id === selectedFlavourId}
-                  onSelect={() => selectFlavour(f.id)}
-                />
-              ))}
-              {archivedFlavours.length > 0 && (
-                <>
-                  <p className="text-muted-foreground mt-2 px-3 text-xs font-medium tracking-wide uppercase">
-                    Archived ({archivedFlavours.length})
-                  </p>
-                  {archivedFlavours.map((f) => (
-                    <FlavourRow
-                      key={f.id}
-                      flavour={f}
-                      selected={f.id === selectedFlavourId}
-                      onSelect={() => selectFlavour(f.id)}
-                    />
-                  ))}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              {flavourVersions.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => selectVersion(v.id)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-all",
-                    v.id === selectedVersionId
-                      ? "border-primary bg-primary/10 shadow-sm"
-                      : "hover:bg-muted border-transparent",
-                  )}
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {flavourVersions.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => selectVersion(v.id)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-all",
+                      v.id === selectedVersionId
+                        ? "border-primary bg-primary/10 shadow-sm"
+                        : "hover:bg-muted border-transparent",
+                    )}
+                  >
+                    <span className="font-qty font-medium">
+                      v{v.version_no}
+                    </span>
+                    <StatusTag status={v.status} />
+                    <span className="text-muted-foreground text-xs">
+                      {v.batchCount} batch{v.batchCount === 1 ? "" : "es"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {canCreateVersion && selectedFlavour && (
+                <Button
+                  onClick={() => setNewVersionOpen(true)}
+                  disabled={materials.length === 0}
+                  title={
+                    materials.length === 0
+                      ? "Add a raw material first"
+                      : undefined
+                  }
                 >
-                  <span className="font-qty font-medium">v{v.version_no}</span>
-                  <StatusTag status={v.status} />
-                  <span className="text-muted-foreground text-xs">
-                    {v.batchCount} batch{v.batchCount === 1 ? "" : "es"}
-                  </span>
-                </button>
-              ))}
+                  <Pencil />
+                  {flavourVersions.length === 0
+                    ? "Create first recipe"
+                    : `New version → v${nextVersionNo}`}
+                </Button>
+              )}
             </div>
-            {canCreateVersion && selectedFlavour && (
-              <Button
-                onClick={() => setNewVersionOpen(true)}
-                disabled={materials.length === 0}
-                title={
-                  materials.length === 0
-                    ? "Add a raw material first"
-                    : undefined
+
+            {flavourVersions.length === 0 ? (
+              <EmptyState
+                icon={FlaskConical}
+                title="No recipe yet"
+                description={
+                  canCreateVersion
+                    ? `This flavour has no recipe yet — use “Create first recipe” above to give it one.`
+                    : "This flavour has no recipe versions yet."
                 }
-              >
-                <Pencil />
-                {flavourVersions.length === 0
-                  ? "Create first recipe"
-                  : `New version → v${nextVersionNo}`}
-              </Button>
+              />
+            ) : (
+              selectedVersionId && (
+                <Card>
+                  <CardContent className="grid gap-4">
+                    {loadingDetail ? (
+                      <div className="grid gap-2">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </div>
+                    ) : detail ? (
+                      <>
+                        <div className="grid gap-3">
+                          {detail.lines.map((line, i) => (
+                            <div
+                              key={line.materialName}
+                              className="grid gap-1.5"
+                            >
+                              <div className="flex items-baseline justify-between text-sm">
+                                <span className="font-medium">
+                                  {line.materialName}
+                                </span>
+                                <span className="font-qty">
+                                  {line.percentage}%
+                                </span>
+                              </div>
+                              <div className="bg-muted h-2.5 overflow-hidden rounded-full">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full transition-all",
+                                    SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+                                  )}
+                                  style={{ width: `${line.percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="border-t pt-3 text-sm">
+                          <p className="text-muted-foreground italic">
+                            &ldquo;{detail.note}&rdquo;
+                          </p>
+                          <p className="text-muted-foreground mt-1 text-xs">
+                            {detail.createdByName} ·{" "}
+                            {new Date(detail.createdAt).toLocaleDateString(
+                              "en-IN",
+                            )}{" "}
+                            · {detail.wastagePct}% wastage
+                          </p>
+                          {canCreateVersion &&
+                            selectedVersionSummary?.status === "archived" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-3"
+                                onClick={() =>
+                                  setRollbackTarget(selectedVersionSummary)
+                                }
+                              >
+                                <RotateCcw /> Make v
+                                {selectedVersionSummary.version_no} current
+                                again
+                              </Button>
+                            )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-destructive text-sm">
+                        Couldn&apos;t load this version.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )
             )}
           </div>
-
-          {flavourVersions.length === 0 ? (
-            <EmptyState
-              icon={FlaskConical}
-              title="No recipe yet"
-              description={
-                canCreateVersion
-                  ? `This flavour has no recipe yet — use “Create first recipe” above to give it one.`
-                  : "This flavour has no recipe versions yet."
-              }
-            />
-          ) : (
-            selectedVersionId && (
-              <Card>
-                <CardContent className="grid gap-4">
-                  {loadingDetail ? (
-                    <div className="grid gap-2">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-2/3" />
-                    </div>
-                  ) : detail ? (
-                    <>
-                      <div className="grid gap-3">
-                        {detail.lines.map((line, i) => (
-                          <div key={line.materialName} className="grid gap-1.5">
-                            <div className="flex items-baseline justify-between text-sm">
-                              <span className="font-medium">
-                                {line.materialName}
-                              </span>
-                              <span className="font-qty">
-                                {line.percentage}%
-                              </span>
-                            </div>
-                            <div className="bg-muted h-2.5 overflow-hidden rounded-full">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full transition-all",
-                                  SEGMENT_COLORS[i % SEGMENT_COLORS.length],
-                                )}
-                                style={{ width: `${line.percentage}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="border-t pt-3 text-sm">
-                        <p className="text-muted-foreground italic">
-                          &ldquo;{detail.note}&rdquo;
-                        </p>
-                        <p className="text-muted-foreground mt-1 text-xs">
-                          {detail.createdByName} ·{" "}
-                          {new Date(detail.createdAt).toLocaleDateString(
-                            "en-IN",
-                          )}{" "}
-                          · {detail.wastagePct}% wastage
-                        </p>
-                        {canCreateVersion &&
-                          selectedVersionSummary?.status === "archived" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-3"
-                              onClick={() =>
-                                setRollbackTarget(selectedVersionSummary)
-                              }
-                            >
-                              <RotateCcw /> Make v
-                              {selectedVersionSummary.version_no} current again
-                            </Button>
-                          )}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-destructive text-sm">
-                      Couldn&apos;t load this version.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            )
-          )}
         </div>
-      </div>
+      )}
 
       {canCreateVersion && selectedFlavour && (
         <NewVersionDialog
@@ -336,6 +420,17 @@ export function RecipesView({
               percentage: l.percentage,
             })) ?? []
           }
+        />
+      )}
+
+      {canCreateVersion && (
+        <NewFlavourDialog
+          open={newFlavourOpen}
+          onOpenChange={setNewFlavourOpen}
+          onCreated={(id) => {
+            setPendingSelectFlavourId(id);
+            router.refresh();
+          }}
         />
       )}
 
@@ -374,7 +469,9 @@ function FlavourRow({
       onClick={onSelect}
       className={cn(
         "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium transition-colors",
-        selected ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground",
+        selected
+          ? "bg-primary/10 text-primary"
+          : "hover:bg-muted text-foreground",
       )}
     >
       <span
@@ -389,7 +486,10 @@ function FlavourRow({
       </span>
       <span className="grid min-w-0 flex-1">
         <span
-          className={cn("truncate", !flavour.is_active && "text-muted-foreground")}
+          className={cn(
+            "truncate",
+            !flavour.is_active && "text-muted-foreground",
+          )}
         >
           {flavour.name}
         </span>
@@ -398,5 +498,85 @@ function FlavourRow({
         </span>
       </span>
     </button>
+  );
+}
+
+function NewFlavourDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (id: string) => void;
+}) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<CreateFlavourInput>({
+    resolver: zodResolver(createFlavourSchema),
+    defaultValues: { name: "" },
+  });
+  const [serverError, setServerError] = React.useState<string | null>(null);
+
+  async function onSubmit(values: CreateFlavourInput) {
+    setServerError(null);
+    const result = await createFlavour(values);
+    if (!result.success) {
+      setServerError(result.error);
+      return;
+    }
+    reset();
+    onOpenChange(false);
+    if (result.data) onCreated(result.data.id);
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New flavour</DialogTitle>
+          <DialogDescription>
+            Give it a name — you&apos;ll build its recipe right after.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="grid gap-4"
+          id="new-flavour-form"
+        >
+          <div className="grid gap-1.5">
+            <Label htmlFor="new-flavour-name">Name</Label>
+            <Input id="new-flavour-name" {...register("name")} autoFocus />
+            {errors.name && (
+              <p className="text-destructive text-sm">{errors.name.message}</p>
+            )}
+          </div>
+          {serverError && (
+            <p className="text-destructive text-sm">{serverError}</p>
+          )}
+        </form>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="new-flavour-form"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Creating…" : "Create flavour"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
