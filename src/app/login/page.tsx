@@ -49,7 +49,7 @@ export default function LoginPage() {
     <div className="bg-background flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Smooxy Inventory</CardTitle>
+          <CardTitle>Smokzy Inventory</CardTitle>
           <CardDescription>Sign in with your work email.</CardDescription>
         </CardHeader>
         <CardContent>

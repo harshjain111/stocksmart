@@ -1,4 +1,4 @@
-# CLAUDE.md — Smooxy Inventory System
+# CLAUDE.md — Smokzy Inventory System
 
 Build rules for this repo. Read this before writing any code. When something here conflicts with a prompt, **this file wins** — stop and flag it.
 
@@ -6,7 +6,7 @@ Build rules for this repo. Read this before writing any code. When something her
 
 ## What this is
 
-A multi-branch inventory system for Smooxy: raw materials are bought, mixed into flavours by recipe, and distributed to godowns, offices, clubs and other cities. Departments raise requisitions, the store fulfils them by transfer or purchase, and everything received is booked through a Goods Receipt Note.
+A multi-branch inventory system for Smokzy: raw materials are bought, mixed into flavours by recipe, and distributed to godowns, offices, clubs and other cities. Departments raise requisitions, the store fulfils them by transfer or purchase, and everything received is booked through a Goods Receipt Note.
 
 **Aim:** never out of stock anywhere, no leakage, minimum wastage — as the business scales to more cities.
 

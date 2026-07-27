@@ -1,4 +1,4 @@
-# Smooxy Inventory System — PRD v1.0
+# Smokzy Inventory System — PRD v1.0
 
 **Owner:** Rohit Saha · **Date:** 26 July 2026 · **Status:** For approval
 
@@ -6,7 +6,7 @@
 
 ## 1. Why
 
-Smooxy buys raw flavour materials, mixes them into finished flavours by recipe, and distributes them to godowns, offices, clubs and cafés across more than one city. Today that runs on memory, WhatsApp and spreadsheets.
+Smokzy buys raw flavour materials, mixes them into finished flavours by recipe, and distributes them to godowns, offices, clubs and cafés across more than one city. Today that runs on memory, WhatsApp and spreadsheets.
 
 Three things go wrong at scale, and this system exists to stop all three:
 
@@ -140,7 +140,7 @@ Nothing is ever silently overwritten.
 
 ### 5.7 Club sync
 
-The Smooxy Club app stays exactly as it is. This system pulls from its API — nightly, plus a Sync now button.
+The Smokzy Club app stays exactly as it is. This system pulls from its API — nightly, plus a Sync now button.
 
 **Pulled:** club, date, flavour, closing stock, quantity received, shishas sold.
 **Not pulled:** attendance, staff details, photos.

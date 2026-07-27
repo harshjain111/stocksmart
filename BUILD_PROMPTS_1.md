@@ -1,4 +1,4 @@
-# Smooxy Inventory — Build Prompts
+# Smokzy Inventory — Build Prompts
 
 Sequential prompts for Claude Code. Run them in order. Each one assumes the previous is done and committed.
 
@@ -188,7 +188,7 @@ Build Buy → What to buy. Three demand sources shown together: approved requisi
 Build purchase order creation and the Orders list. Filter by supplier, status, ship-to branch and date. Rates pre-fill from the last known rate and stay editable. A blank rate is valid and marks the order rate-to-confirm.
 
 ### 5.5
-Build the PO detail and send flow. Generate a clean printable or shareable order document with Smooxy's letterhead, the supplier's details, the ship-to address, and the lines. Sending locks quantities but not rates.
+Build the PO detail and send flow. Generate a clean printable or shareable order document with Smokzy's letterhead, the supplier's details, the ship-to address, and the lines. Sending locks quantities but not rates.
 
 ### 5.6
 Wire vendor GRNs into the Receive screen from phase 4. A vendor GRN additionally captures the rate per line and an invoice file upload to Supabase Storage. Posting it writes a new `supplier_rates` row, updates the PO status to partially or fully received, and posts stock movements at the ship-to department.
@@ -205,7 +205,7 @@ Add supplier performance: on-time percentage, short-supply percentage, and rate 
 *Goal: the system starts telling you things instead of only recording them. ~1.5 weeks.*
 
 ### 6.1
-Build the club API client. Fetch daily closing stock from the Smooxy Club app: club, date, flavour, closing stock, quantity received, shishas sold. Handle auth, retries and partial failures. Log every run into `club_sync_log` with status, row count and any error. Read-only — never write back.
+Build the club API client. Fetch daily closing stock from the Smokzy Club app: club, date, flavour, closing stock, quantity received, shishas sold. Handle auth, retries and partial failures. Log every run into `club_sync_log` with status, row count and any error. Read-only — never write back.
 
 ### 6.2
 Create `club_flavour_map` and build the mapping screen under Setup → Club link. Club app flavour name on the left, our flavour on the right, with unmapped entries flagged. Sync refuses to run for unmapped flavours rather than guessing.

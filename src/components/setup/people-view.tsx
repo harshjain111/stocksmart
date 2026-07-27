@@ -183,7 +183,7 @@ export function PeopleView({
         <EmptyState
           icon={UsersRound}
           title="No one's been invited yet"
-          description="Invite your first teammate to give them access to Smooxy Inventory."
+          description="Invite your first teammate to give them access to Smokzy Inventory."
           actionLabel="Invite user"
           onAction={() => setInviteOpen(true)}
         />
@@ -213,7 +213,7 @@ export function PeopleView({
           open={!!deactivateTarget}
           onOpenChange={(open) => !open && setDeactivateTarget(null)}
           title={`Deactivate ${deactivateTarget.full_name}`}
-          description="They'll immediately lose access to Smooxy Inventory. This does not delete their account or history — you can't undo it from here, though."
+          description="They'll immediately lose access to Smokzy Inventory. This does not delete their account or history — you can't undo it from here, though."
           confirmPhrase={deactivateTarget.full_name}
           confirmLabel="Deactivate"
           onConfirm={async () => {

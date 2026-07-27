@@ -56,7 +56,7 @@ export function TopBar() {
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="border-b">
-            <SheetTitle>Smooxy Inventory</SheetTitle>
+            <SheetTitle>Smokzy Inventory</SheetTitle>
           </SheetHeader>
           <div className="p-3">
             <SidebarNav onNavigate={() => setSheetOpen(false)} />
@@ -64,7 +64,7 @@ export function TopBar() {
         </SheetContent>
       </Sheet>
 
-      <span className="hidden font-semibold lg:inline">Smooxy Inventory</span>
+      <span className="hidden font-semibold lg:inline">Smokzy Inventory</span>
 
       <div className="ml-auto flex items-center gap-3">
         <div className="hidden text-right sm:block">

@@ -1,6 +1,6 @@
-# Smooxy Inventory System
+# Smokzy Inventory System
 
-Multi-branch inventory system for Smooxy — see [`PRD.md`](./PRD.md) for product spec and [`CLAUDE.md`](./CLAUDE.md) for build rules. Build sequence in [`BUILD_PROMPTS_1.md`](./BUILD_PROMPTS_1.md).
+Multi-branch inventory system for Smokzy — see [`PRD.md`](./PRD.md) for product spec and [`CLAUDE.md`](./CLAUDE.md) for build rules. Build sequence in [`BUILD_PROMPTS_1.md`](./BUILD_PROMPTS_1.md).
 
 ## Stack
 

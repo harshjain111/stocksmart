@@ -76,7 +76,7 @@ export default async function DispatchNotePage({
       <div className="grid gap-6 rounded-lg border p-8 print:border-none">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xl font-semibold">Smooxy Inventory</p>
+            <p className="text-xl font-semibold">Smokzy Inventory</p>
             <p className="text-muted-foreground text-sm">{branch?.name}</p>
           </div>
           <div className="text-right">
