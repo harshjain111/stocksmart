@@ -1,9 +1,18 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-type Tone = "neutral" | "primary" | "warning" | "destructive" | "muted";
+type Tone =
+  | "neutral"
+  | "primary"
+  | "warning"
+  | "destructive"
+  | "muted"
+  | "success"
+  | "info";
 
 // Covers the status enums across every document lifecycle in CLAUDE.md.
+// `current` (recipe version) reads as an informational badge (purple/
+// lavender), distinct from `primary` (teal, the brand/action colour).
 const STATUS_TONE: Record<string, Tone> = {
   draft: "muted",
   submitted: "warning",
@@ -18,7 +27,7 @@ const STATUS_TONE: Record<string, Tone> = {
   partially_received: "warning",
   posted: "primary",
   confirmed: "primary",
-  current: "primary",
+  current: "info",
   archived: "muted",
 };
 
@@ -28,6 +37,8 @@ const TONE_CLASSES: Record<Tone, string> = {
   warning: "bg-warning/25 text-warning-foreground border-warning/40",
   destructive: "bg-destructive/15 text-destructive border-destructive/20",
   muted: "bg-muted text-muted-foreground border-transparent",
+  success: "bg-success/15 text-success border-success/25",
+  info: "bg-info/12 text-info border-info/20",
 };
 
 type StatusTagProps = {

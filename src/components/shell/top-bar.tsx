@@ -54,9 +54,12 @@ export function TopBar() {
           <Menu />
           <span className="sr-only">Open navigation</span>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <SheetHeader className="border-b">
-            <SheetTitle>Smokzy Inventory</SheetTitle>
+        <SheetContent
+          side="left"
+          className="bg-sidebar text-sidebar-foreground w-64 p-0"
+        >
+          <SheetHeader className="border-sidebar-border border-b">
+            <SheetTitle className="text-white">Smokzy Inventory</SheetTitle>
           </SheetHeader>
           <div className="p-3">
             <SidebarNav onNavigate={() => setSheetOpen(false)} />

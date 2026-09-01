@@ -25,8 +25,8 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             className={cn(
               "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               active
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             )}
           >
             <Icon className="size-4" strokeWidth={2} />
