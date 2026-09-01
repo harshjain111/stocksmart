@@ -7,7 +7,7 @@ import {
   updatePoLineRate,
   updatePoLineQty,
   sendOrder,
-} from "@/app/(app)/buy/orders/[poId]/actions";
+} from "@/app/(app)/purchases/orders/[poId]/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusTag } from "@/components/shared/status-tag";
 import { StatCard } from "@/components/shared/stat-card";
@@ -140,20 +140,20 @@ export function PoDetailView({
   }
 
   return (
-    <div className="grid gap-6 p-6">
+    <div className="grid gap-6">
       <PageHeader
         title={detail.poNo}
         description={`${detail.supplier.name} · Ship to ${detail.shipTo.departmentName} (${detail.shipTo.branchName})`}
         action={
           <div className="flex gap-2">
             <Link
-              href="/buy/orders"
+              href="/purchases/orders"
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               <ArrowLeft /> Back to orders
             </Link>
             <Link
-              href={`/buy/orders/${detail.id}/print`}
+              href={`/purchases/orders/${detail.id}/print`}
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               <Printer /> Printable order

@@ -12,7 +12,7 @@ export default async function PoPrintPage({
 }) {
   const { poId } = await params;
   const session = await getSession();
-  if (!session || !can(session.role, "nav:buy")) {
+  if (!session || !can(session.role, "nav:purchases")) {
     redirect("/");
   }
 

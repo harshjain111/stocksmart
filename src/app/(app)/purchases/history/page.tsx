@@ -1,15 +1,15 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { canAccessBuyTab } from "@/lib/buy-tabs";
+import { canAccessPurchasesTab } from "@/lib/purchases-tabs";
 import {
   getHistoryFilterOptions,
   getPurchaseHistory,
-} from "@/app/(app)/buy/history/actions";
-import { PurchaseHistoryView } from "@/components/buy/purchase-history-view";
+} from "@/app/(app)/purchases/history/actions";
+import { PurchaseHistoryView } from "@/components/purchases/purchase-history-view";
 
 export default async function PurchaseHistoryPage() {
   const session = await getSession();
-  if (!session || !canAccessBuyTab(session.role, "/buy/history")) {
+  if (!session || !canAccessPurchasesTab(session.role, "/purchases/history")) {
     redirect("/");
   }
 

@@ -34,10 +34,10 @@ export const NAV_ITEMS: NavItem[] = [
     permission: "nav:send-receive",
   },
   {
-    label: "Buy",
-    href: "/buy",
+    label: "Purchases",
+    href: "/purchases",
     icon: ShoppingCart,
-    permission: "nav:buy",
+    permission: "nav:purchases",
   },
   {
     label: "Mix",

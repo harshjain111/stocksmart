@@ -7,7 +7,7 @@ import {
   createDraftOrders,
   type ManualEntryInput,
   type BuyGroupView,
-} from "@/app/(app)/buy/actions";
+} from "@/app/(app)/purchases/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DataTable } from "@/components/shared/data-table";
@@ -37,7 +37,7 @@ type ManualEntryDraft = ManualEntryInput & {
   branchName: string;
 };
 
-export function WhatToBuyView({
+export function CreatePoView({
   branches,
   rawMaterials,
   flavours,
@@ -63,6 +63,7 @@ export function WhatToBuyView({
     Record<string, string>
   >({});
   const [creatingKey, setCreatingKey] = React.useState<string | null>(null);
+  const [generatingAll, setGeneratingAll] = React.useState(false);
   const [createdOrders, setCreatedOrders] = React.useState<
     { id: string; poNo: string }[]
   >([]);
@@ -122,12 +123,68 @@ export function WhatToBuyView({
     0,
   );
 
+  const readyGroups = groups.filter(
+    (g) => g.supplierId ?? pickedSupplier[g.key],
+  );
+  const blockedGroups = groups.filter(
+    (g) => !(g.supplierId ?? pickedSupplier[g.key]),
+  );
+
+  async function handleGenerateAll() {
+    if (readyGroups.length === 0) return;
+    setGeneratingAll(true);
+    setServerError(null);
+    const result = await createDraftOrders(
+      readyGroups.map((group) => ({
+        supplierId: (group.supplierId ?? pickedSupplier[group.key])!,
+        departmentId: group.departmentId,
+        lines: group.lines.map((l) => ({
+          rawMaterialId: l.rawMaterialId,
+          qtyG: l.buyG,
+        })),
+      })),
+    );
+    setGeneratingAll(false);
+    if (!result.success) {
+      setServerError(result.error);
+      return;
+    }
+    setCreatedOrders((prev) => [...prev, ...result.data]);
+    load();
+  }
+
   return (
-    <div className="grid gap-6 p-6">
+    <div className="grid gap-6">
       <PageHeader
-        title="What to buy"
-        description="Approved requisitions, manual entries and par top-up, grouped into draft orders by supplier."
+        title="Create purchase order"
+        description="Add items from approved requisitions, par top-up, or enter them manually — the system groups them by supplier automatically."
       />
+
+      {!loading && groups.length > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">
+                {readyGroups.length} purchase order
+                {readyGroups.length === 1 ? "" : "s"} will be generated
+                {blockedGroups.length > 0 &&
+                  ` (${blockedGroups.length} blocked — supplier not assigned)`}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                One PO per supplier, grouped automatically from every line below.
+              </p>
+            </div>
+            {canCreateOrders && (
+              <Button
+                disabled={readyGroups.length === 0 || generatingAll}
+                onClick={handleGenerateAll}
+              >
+                {generatingAll ? "Generating…" : "Generate Purchase Orders"}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {!loading && groups.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -294,8 +351,10 @@ function BuyGroupCard({
             {group.supplierName ? (
               <p className="font-medium">{group.supplierName}</p>
             ) : (
-              <div className="flex items-center gap-2">
-                <Label className="text-sm">Supplier</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-warning-foreground bg-warning/25 rounded-full px-2 py-0.5 text-xs font-medium">
+                  Supplier not assigned
+                </span>
                 <Select
                   items={suppliers.map((s) => ({ value: s.id, label: s.name }))}
                   value={pickedSupplierId}

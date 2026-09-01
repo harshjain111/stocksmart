@@ -1,17 +1,17 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { canAccessBuyTab } from "@/lib/buy-tabs";
+import { canAccessPurchasesTab } from "@/lib/purchases-tabs";
 import { can } from "@/lib/auth/permissions";
 import {
   getOrderFilterOptions,
   getOrders,
   getRawMaterialsWithLastRate,
-} from "@/app/(app)/buy/orders/actions";
-import { OrdersView } from "@/components/buy/orders-view";
+} from "@/app/(app)/purchases/orders/actions";
+import { OrdersView } from "@/components/purchases/orders-view";
 
 export default async function OrdersPage() {
   const session = await getSession();
-  if (!session || !canAccessBuyTab(session.role, "/buy/orders")) {
+  if (!session || !canAccessPurchasesTab(session.role, "/purchases/orders")) {
     redirect("/");
   }
 

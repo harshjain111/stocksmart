@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { canAccessBuyTab } from "@/lib/buy-tabs";
-import { getSupplierPerformance } from "@/app/(app)/buy/performance/actions";
-import { SupplierPerformanceView } from "@/components/buy/supplier-performance-view";
+import { canAccessPurchasesTab } from "@/lib/purchases-tabs";
+import { getSupplierPerformance } from "@/app/(app)/purchases/suppliers/actions";
+import { SupplierPerformanceView } from "@/components/purchases/supplier-performance-view";
 
 export default async function SupplierPerformancePage() {
   const session = await getSession();
-  if (!session || !canAccessBuyTab(session.role, "/buy/performance")) {
+  if (!session || !canAccessPurchasesTab(session.role, "/purchases/suppliers")) {
     redirect("/");
   }
 

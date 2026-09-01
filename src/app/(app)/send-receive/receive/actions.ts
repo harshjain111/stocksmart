@@ -35,6 +35,14 @@ function scopedToDepartmentIds(
   return null;
 }
 
+// Supplier identity is confidential from Store/Godown roles (store_manager,
+// hod) — they receive goods, they don't need to know who they came from.
+// This is enforced here, server-side, before the payload is ever built —
+// never by fetching the name and hiding it in the client.
+function canSeeSupplier(role: string): boolean {
+  return role === "admin" || role === "branch_manager" || role === "purchase_manager";
+}
+
 type InboundTransfer = {
   id: string;
   transferNo: string;
@@ -104,7 +112,9 @@ export async function getInboundTransfers(): Promise<
 type InboundOrder = {
   id: string;
   poNo: string;
-  supplierName: string;
+  // null for roles that must not see supplier identity (Store/Godown) —
+  // see canSeeSupplier() above.
+  supplierName: string | null;
   shipToDepartmentName: string;
   lineCount: number;
   existingGrnId: string | null;
@@ -150,7 +160,9 @@ export async function getInboundOrders(): Promise<ActionResult<InboundOrder[]>> 
       return {
         id: po.id,
         poNo: po.po_no,
-        supplierName: po.suppliers?.name ?? "Unknown supplier",
+        supplierName: canSeeSupplier(session.role)
+          ? (po.suppliers?.name ?? "Unknown supplier")
+          : null,
         shipToDepartmentName: po.departments?.name ?? "Unknown department",
         lineCount: po.po_lines.length,
         existingGrnId: draftGrn?.id ?? po.grns[0]?.id ?? null,
@@ -423,6 +435,7 @@ type GrnDetail = {
   poNo: string | null;
   supplierName: string | null;
   invoicePath: string | null;
+  transportationCost: number | null;
   lines: GrnLine[];
 };
 
@@ -439,7 +452,7 @@ export async function getGrnDetail(
   const { data: grn } = await admin
     .from("grns")
     .select(
-      "id, grn_no, status, source, branch_id, invoice_path, department:department_id(name, id), transfers(transfer_no, from_department:from_department_id(name), requisitions(req_no)), purchase_orders(po_no, suppliers(name))",
+      "id, grn_no, status, source, branch_id, invoice_path, transportation_cost, department:department_id(name, id), transfers(transfer_no, from_department:from_department_id(name), requisitions(req_no)), purchase_orders(po_no, suppliers(name))",
     )
     .eq("id", parsed.data)
     .single();
@@ -512,8 +525,12 @@ export async function getGrnDetail(
       fromDepartmentName: transfer?.from_department?.name ?? null,
       requisitionReqNo: transfer?.requisitions?.req_no ?? null,
       poNo: purchaseOrder?.po_no ?? null,
-      supplierName: purchaseOrder?.suppliers?.name ?? null,
+      supplierName: canSeeSupplier(session.role)
+        ? (purchaseOrder?.suppliers?.name ?? null)
+        : null,
       invoicePath: grn.invoice_path,
+      transportationCost:
+        grn.transportation_cost == null ? null : Number(grn.transportation_cost),
       lines: (lines ?? []).map((l) => ({
         id: l.id,
         itemType: l.item_type,
@@ -547,6 +564,34 @@ export async function updateGrnLineRate(
   const { error } = await supabase
     .from("grn_lines")
     .update({ rate: parsedRate.data })
+    .eq("id", parsedId.data);
+  if (error) return { success: false, error: error.message };
+
+  return { success: true, data: null };
+}
+
+// Transportation cost belongs on the GRN (the actual receipt), never the
+// PO — it's a real cost incurred bringing goods to the receiving location,
+// only known once the delivery actually happens. Freely editable while the
+// GRN is still draft, same as line rates; frozen the moment it posts.
+export async function updateGrnTransportationCost(
+  grnId: string,
+  cost: number | null,
+): Promise<ActionResult<null>> {
+  const session = await requireReceiveAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsedId = z.uuid().safeParse(grnId);
+  if (!parsedId.success) return { success: false, error: "Invalid GRN." };
+  const parsedCost = z.coerce.number().nonnegative().nullable().safeParse(cost);
+  if (!parsedCost.success) {
+    return { success: false, error: "Transportation cost can't be negative." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("grns")
+    .update({ transportation_cost: parsedCost.data })
     .eq("id", parsedId.data);
   if (error) return { success: false, error: error.message };
 
@@ -664,6 +709,8 @@ export async function postGrn(grnId: string): Promise<ActionResult<null>> {
 
   revalidatePath("/send-receive/receive");
   revalidatePath("/send-receive/in-transit");
-  revalidatePath("/buy/orders");
+  revalidatePath("/purchases/orders");
+  revalidatePath("/purchases");
+  revalidatePath("/purchases/grn");
   return { success: true, data: null };
 }

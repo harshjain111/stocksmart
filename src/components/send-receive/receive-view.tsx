@@ -9,6 +9,7 @@ import {
   getGrnDetail,
   updateGrnLine,
   updateGrnLineRate,
+  updateGrnTransportationCost,
   uploadGrnInvoice,
   getGrnInvoiceUrl,
   postGrn,
@@ -41,7 +42,8 @@ type InboundTransfer = {
 type InboundOrder = {
   id: string;
   poNo: string;
-  supplierName: string;
+  // null for roles that must not see supplier identity (Store/Godown).
+  supplierName: string | null;
   shipToDepartmentName: string;
   lineCount: number;
   existingGrnId: string | null;
@@ -195,7 +197,8 @@ export function ReceiveView({
                   )}
                 </div>
                 <span className="text-muted-foreground text-xs">
-                  {o.supplierName} → {o.shipToDepartmentName}
+                  {o.supplierName ? `${o.supplierName} → ` : ""}
+                  {o.shipToDepartmentName}
                 </span>
                 <span className="text-muted-foreground text-xs">
                   {o.lineCount} item{o.lineCount === 1 ? "" : "s"}
@@ -252,6 +255,7 @@ type GrnDetail = {
   poNo: string | null;
   supplierName: string | null;
   invoicePath: string | null;
+  transportationCost: number | null;
   lines: GrnLine[];
 };
 
@@ -278,6 +282,8 @@ function GrnFormPanel({
   const [isPosting, setIsPosting] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const [invoiceUrl, setInvoiceUrl] = React.useState<string | null>(null);
+  const [transportCost, setTransportCost] = React.useState("");
+  const [transportSaved, setTransportSaved] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -322,6 +328,11 @@ function GrnFormPanel({
     } else {
       setInvoiceUrl(null);
     }
+    setTransportCost(
+      result.data.transportationCost != null
+        ? String(result.data.transportationCost)
+        : "",
+    );
   }, [grnId]);
 
   React.useEffect(() => {
@@ -401,6 +412,18 @@ function GrnFormPanel({
     }
   }
 
+  async function saveTransportCost() {
+    const value = transportCost.trim();
+    const cost = value === "" ? null : parseFloat(value);
+    const result = await updateGrnTransportationCost(grnId, cost);
+    if (result.success) {
+      setTransportSaved(true);
+      setTimeout(() => setTransportSaved(false), 1500);
+    } else {
+      setServerError(result.error);
+    }
+  }
+
   async function handlePost() {
     if (!detail) return;
     setServerError(null);
@@ -430,7 +453,7 @@ function GrnFormPanel({
     (l) => (receivedKg[l.id] ?? "").trim() !== "",
   );
   const description = isVendor
-    ? `${detail.supplierName ?? "?"} → ${detail.departmentName}${detail.poNo ? ` · ${detail.poNo}` : ""}`
+    ? `${detail.supplierName ? `${detail.supplierName} → ` : ""}${detail.departmentName}${detail.poNo ? ` · ${detail.poNo}` : ""}`
     : `${detail.fromDepartmentName ?? "?"} → ${detail.departmentName}${
         detail.transferNo ? ` · ${detail.transferNo}` : ""
       }${detail.requisitionReqNo ? ` · from ${detail.requisitionReqNo}` : ""}`;
@@ -445,7 +468,30 @@ function GrnFormPanel({
 
       {isVendor && (
         <Card>
-          <CardContent className="flex flex-wrap items-center gap-3">
+          <CardContent className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="transport-cost" className="text-sm font-medium">
+                Transportation cost
+              </Label>
+              <div className="relative w-32">
+                <span className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs">
+                  ₹
+                </span>
+                <Input
+                  id="transport-cost"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  disabled={!isDraft}
+                  className="font-qty pl-5"
+                  value={transportCost}
+                  onChange={(e) => setTransportCost(e.target.value)}
+                  onBlur={saveTransportCost}
+                />
+              </div>
+              {transportSaved && <span className="text-primary text-xs">Saved</span>}
+            </div>
             <Label className="text-sm font-medium">Invoice</Label>
             {invoiceUrl && (
               <a
@@ -623,6 +669,15 @@ function GrnFormPanel({
         })}
       </div>
 
+      {isVendor && (
+        <LandedCostSummary
+          lines={detail.lines}
+          receivedKg={receivedKg}
+          rates={rates}
+          transportCost={transportCost}
+        />
+      )}
+
       {serverError && <p className="text-destructive text-sm">{serverError}</p>}
 
       {isDraft && (
@@ -642,5 +697,64 @@ function GrnFormPanel({
         </div>
       )}
     </div>
+  );
+}
+
+function formatRupees(value: number): string {
+  if (value >= 100000) return `₹${(value / 100000).toFixed(2)}L`;
+  if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K`;
+  return `₹${Math.round(value * 100) / 100}`;
+}
+
+// Purchase value + transportation = landed cost — the actual cost of
+// getting this delivery into stock, not just what the supplier billed for
+// the goods themselves.
+function LandedCostSummary({
+  lines,
+  receivedKg,
+  rates,
+  transportCost,
+}: {
+  lines: GrnLine[];
+  receivedKg: Record<string, string>;
+  rates: Record<string, string>;
+  transportCost: string;
+}) {
+  let purchaseValue = 0;
+  let totalReceivedKg = 0;
+  for (const line of lines) {
+    const kg = parseFloat(receivedKg[line.id] ?? "");
+    const rate = parseFloat(rates[line.id] ?? "");
+    if (!Number.isNaN(kg)) totalReceivedKg += kg;
+    if (!Number.isNaN(kg) && !Number.isNaN(rate)) purchaseValue += kg * rate;
+  }
+  const transport = parseFloat(transportCost);
+  const transportValue = Number.isNaN(transport) ? 0 : transport;
+  const landedCost = purchaseValue + transportValue;
+  if (purchaseValue === 0 && transportValue === 0) return null;
+
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <span>
+          <span className="text-muted-foreground">Purchase value: </span>
+          <span className="font-qty">{formatRupees(purchaseValue)}</span>
+        </span>
+        <span>
+          <span className="text-muted-foreground">Transportation: </span>
+          <span className="font-qty">{formatRupees(transportValue)}</span>
+        </span>
+        <span>
+          <span className="text-muted-foreground">Landed cost: </span>
+          <span className="font-qty text-primary">{formatRupees(landedCost)}</span>
+        </span>
+        {totalReceivedKg > 0 && (
+          <span>
+            <span className="text-muted-foreground">Landed cost/kg: </span>
+            <span className="font-qty">{formatRupees(landedCost / totalReceivedKg)}</span>
+          </span>
+        )}
+      </CardContent>
+    </Card>
   );
 }

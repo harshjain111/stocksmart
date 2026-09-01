@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
-import { getPoDetail } from "@/app/(app)/buy/orders/[poId]/actions";
-import { PoDetailView } from "@/components/buy/po-detail-view";
+import { getPoDetail } from "@/app/(app)/purchases/orders/[poId]/actions";
+import { PoDetailView } from "@/components/purchases/po-detail-view";
 
 export default async function PoDetailPage({
   params,
@@ -11,7 +11,7 @@ export default async function PoDetailPage({
 }) {
   const { poId } = await params;
   const session = await getSession();
-  if (!session || !can(session.role, "nav:buy")) {
+  if (!session || !can(session.role, "nav:purchases")) {
     redirect("/");
   }
 

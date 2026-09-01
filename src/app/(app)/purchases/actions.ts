@@ -13,7 +13,7 @@ type ActionResult<T> =
 
 async function requireBuyAccess() {
   const session = await getSession();
-  if (!session || !can(session.role, "nav:buy")) return null;
+  if (!session || !can(session.role, "nav:purchases")) return null;
   return session;
 }
 
@@ -460,7 +460,8 @@ export async function createDraftOrders(
     created.push({ id: po.id, poNo: po.po_no });
   }
 
-  revalidatePath("/buy");
+  revalidatePath("/purchases");
+  revalidatePath("/purchases/orders");
   return { success: true, data: created };
 }
 

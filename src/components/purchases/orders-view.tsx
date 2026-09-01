@@ -1,14 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ShoppingCart, Clock, Truck, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import {
   getOrders,
   createManualOrder,
   type OrderFilters,
   type RawMaterialWithRate,
-} from "@/app/(app)/buy/orders/actions";
+} from "@/app/(app)/purchases/orders/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
@@ -57,6 +57,7 @@ const STATUS_OPTIONS = [
   { value: "partially_received", label: "Partially received" },
   { value: "received", label: "Received" },
   { value: "closed", label: "Closed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 export function OrdersView({
@@ -75,11 +76,14 @@ export function OrdersView({
   canCreateOrders: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [rows, setRows] = React.useState(initialOrders);
   const [loading, setLoading] = React.useState(false);
   const [supplierId, setSupplierId] = React.useState("");
   const [branchId, setBranchId] = React.useState("");
-  const [status, setStatus] = React.useState("");
+  const [status, setStatus] = React.useState(
+    () => searchParams.get("status") ?? "",
+  );
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
   const [showCompose, setShowCompose] = React.useState(false);
@@ -99,6 +103,14 @@ export function OrdersView({
     setLoading(false);
     if (result.success) setRows(result.data);
   }, [supplierId, branchId, status, from, to]);
+
+  // A status arriving via ?status=... (e.g. from an Overview KPI/pipeline
+  // link) needs an actual fetch, not just the dropdown reflecting it —
+  // initialOrders is server-fetched unfiltered.
+  React.useEffect(() => {
+    if (searchParams.get("status")) applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const columns: DataTableColumn<OrderRow>[] = [
     { key: "poNo", header: "Order", render: (r) => r.poNo },
@@ -153,7 +165,7 @@ export function OrdersView({
   }, [rows]);
 
   return (
-    <div className="grid gap-6 p-6">
+    <div className="grid gap-6">
       <PageHeader
         title="Orders"
         description="Filter by supplier, status, ship-to branch and date."
@@ -286,7 +298,7 @@ export function OrdersView({
         columns={columns}
         data={rows}
         isLoading={loading}
-        onRowClick={(r) => router.push(`/buy/orders/${r.id}`)}
+        onRowClick={(r) => router.push(`/purchases/orders/${r.id}`)}
         getRowKey={(r) => r.id}
         emptyState={
           <EmptyState

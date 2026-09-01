@@ -29,6 +29,7 @@ const STATUS_TONE: Record<string, Tone> = {
   confirmed: "primary",
   current: "info",
   archived: "muted",
+  cancelled: "destructive",
 };
 
 const TONE_CLASSES: Record<Tone, string> = {

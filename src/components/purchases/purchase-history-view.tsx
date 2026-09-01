@@ -5,7 +5,7 @@ import { History, Package, PackageCheck, FileText } from "lucide-react";
 import {
   getPurchaseHistory,
   type PurchaseHistoryFilters,
-} from "@/app/(app)/buy/history/actions";
+} from "@/app/(app)/purchases/history/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -218,7 +218,7 @@ export function PurchaseHistoryView({
   const receiptCount = data.records.filter((r) => r.type === "receipt").length;
 
   return (
-    <div className="grid gap-6 p-6">
+    <div className="grid gap-6">
       <PageHeader
         title="Purchase history"
         description="Every order and receipt, by supplier and by material, with rate movement over time."

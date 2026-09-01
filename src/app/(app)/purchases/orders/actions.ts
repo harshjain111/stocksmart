@@ -7,14 +7,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createDraftOrders,
   godownsByBranch,
-} from "@/app/(app)/buy/actions";
+} from "@/app/(app)/purchases/actions";
 
 type ActionResult<T> =
   { success: true; data: T } | { success: false; error: string };
 
 async function requireBuyAccess() {
   const session = await getSession();
-  if (!session || !can(session.role, "nav:buy")) return null;
+  if (!session || !can(session.role, "nav:purchases")) return null;
   return session;
 }
 
@@ -34,8 +34,11 @@ type OrderRow = {
   branchName: string;
   status: string;
   createdAt: string;
+  sentAt: string | null;
+  expectedDeliveryDate: string | null;
   lineCount: number;
   totalQtyG: number;
+  valueRupees: number;
 };
 
 export async function getOrderFilterOptions(): Promise<
@@ -74,7 +77,7 @@ export async function getOrders(
   let query = admin
     .from("purchase_orders")
     .select(
-      "id, po_no, status, created_at, suppliers(name), departments(name), branches(name), branch_id, supplier_id, po_lines(qty_g)",
+      "id, po_no, status, created_at, sent_at, expected_delivery_date, suppliers(name), departments(name), branches(name), branch_id, supplier_id, po_lines(qty_g, rate)",
     );
 
   if (session.role === "admin") {
@@ -95,10 +98,12 @@ export async function getOrders(
     po_no: string;
     status: string;
     created_at: string;
+    sent_at: string | null;
+    expected_delivery_date: string | null;
     suppliers: { name: string } | null;
     departments: { name: string } | null;
     branches: { name: string } | null;
-    po_lines: { qty_g: number }[];
+    po_lines: { qty_g: number; rate: number | null }[];
   };
 
   return {
@@ -111,8 +116,14 @@ export async function getOrders(
       branchName: r.branches?.name ?? "",
       status: r.status,
       createdAt: r.created_at,
+      sentAt: r.sent_at,
+      expectedDeliveryDate: r.expected_delivery_date,
       lineCount: r.po_lines.length,
       totalQtyG: r.po_lines.reduce((sum, l) => sum + l.qty_g, 0),
+      valueRupees: r.po_lines.reduce(
+        (sum, l) => sum + (l.qty_g / 1000) * (l.rate ?? 0),
+        0,
+      ),
     })),
   };
 }

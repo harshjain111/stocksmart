@@ -6,7 +6,7 @@ import {
   type DataTableColumn,
 } from "@/components/shared/data-table";
 import { StatCard } from "@/components/shared/stat-card";
-import type { SupplierPerformance } from "@/app/(app)/buy/performance/actions";
+import type { SupplierPerformance } from "@/app/(app)/purchases/suppliers/actions";
 
 export function SupplierPerformanceView({
   suppliers,
@@ -61,7 +61,7 @@ export function SupplierPerformanceView({
   ).length;
 
   return (
-    <div className="grid gap-6 p-6">
+    <div className="grid gap-6">
       <PageHeader
         title="Supplier performance"
         description={`On-time = received within ${onTimeDays} days of being sent. A decision aid, not a report suite.`}

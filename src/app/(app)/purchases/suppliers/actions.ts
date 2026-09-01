@@ -7,10 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type ActionResult<T> =
   { success: true; data: T } | { success: false; error: string };
 
-// "On time" has no promised-delivery-date field to compare against
-// anywhere in this schema (purchase_orders only has sent_at) — this is
-// the closest honest proxy: received within a week of being sent,
-// stated plainly here and on the screen rather than left implicit.
+// "On time" compares actual receipt against expected_delivery_date when
+// the order has one. Older orders (or ones nobody set a date on) fall back
+// to this proxy — received within a week of being sent — stated plainly
+// here and on the screen rather than left implicit.
 const ON_TIME_DAYS = 7;
 
 async function requirePerformanceAccess() {
@@ -28,6 +28,7 @@ export type SupplierPerformance = {
   receivedOrderCount: number;
   shortOrderCount: number;
   shortSupplyPct: number | null;
+  avgLeadTimeDays: number | null;
   rateTrendPct: number | null;
   materialsTracked: number;
 };
@@ -42,7 +43,9 @@ export async function getSupplierPerformance(): Promise<
 
   let poQuery = admin
     .from("purchase_orders")
-    .select("id, supplier_id, sent_at, branch_id, suppliers(name)")
+    .select(
+      "id, supplier_id, sent_at, expected_delivery_date, branch_id, suppliers(name)",
+    )
     .not("sent_at", "is", null);
   if (session.role !== "admin") {
     poQuery = poQuery.eq("branch_id", session.branchId ?? "");
@@ -54,6 +57,7 @@ export async function getSupplierPerformance(): Promise<
     id: string;
     supplier_id: string;
     sent_at: string;
+    expected_delivery_date: string | null;
     suppliers: { name: string } | null;
   };
   const orderRows = (orders ?? []) as unknown as OrderRow[];
@@ -127,6 +131,7 @@ export async function getSupplierPerformance(): Promise<
       onTimeCount: number;
       receivedOrderCount: number;
       shortOrderCount: number;
+      leadTimeDaysSum: number;
     }
   >();
 
@@ -137,6 +142,7 @@ export async function getSupplierPerformance(): Promise<
       onTimeCount: 0,
       receivedOrderCount: 0,
       shortOrderCount: 0,
+      leadTimeDaysSum: 0,
     };
     entry.sentCount += 1;
 
@@ -146,7 +152,12 @@ export async function getSupplierPerformance(): Promise<
       const daysTaken =
         (new Date(receivedAt).getTime() - new Date(o.sent_at).getTime()) /
         ONE_DAY_MS;
-      if (daysTaken <= ON_TIME_DAYS) entry.onTimeCount += 1;
+      entry.leadTimeDaysSum += daysTaken;
+      const onTime = o.expected_delivery_date
+        ? new Date(receivedAt).getTime() <=
+          new Date(o.expected_delivery_date).getTime() + ONE_DAY_MS
+        : daysTaken <= ON_TIME_DAYS;
+      if (onTime) entry.onTimeCount += 1;
       if (shortByPo.get(o.id)) entry.shortOrderCount += 1;
     }
 
@@ -183,6 +194,10 @@ export async function getSupplierPerformance(): Promise<
         shortSupplyPct:
           s.receivedOrderCount > 0
             ? Math.round((s.shortOrderCount / s.receivedOrderCount) * 100)
+            : null,
+        avgLeadTimeDays:
+          s.receivedOrderCount > 0
+            ? Math.round((s.leadTimeDaysSum / s.receivedOrderCount) * 10) / 10
             : null,
         rateTrendPct:
           trendPcts.length > 0

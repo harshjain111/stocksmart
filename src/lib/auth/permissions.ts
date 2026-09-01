@@ -7,7 +7,7 @@ export type Permission =
   | "nav:home"
   | "nav:requisitions"
   | "nav:send-receive"
-  | "nav:buy"
+  | "nav:purchases"
   | "nav:mix"
   | "nav:stock"
   | "nav:recipes"
@@ -25,7 +25,7 @@ const ROLE_PERMISSIONS: Record<Exclude<UserRole, "admin">, Permission[]> = {
     "nav:home",
     "nav:requisitions",
     "nav:send-receive",
-    "nav:buy",
+    "nav:purchases",
     "nav:stock",
     "requisitions:approve",
     "purchase:manage",
@@ -40,7 +40,7 @@ const ROLE_PERMISSIONS: Record<Exclude<UserRole, "admin">, Permission[]> = {
   purchase_manager: [
     "nav:home",
     "nav:send-receive",
-    "nav:buy",
+    "nav:purchases",
     "purchase:manage",
     "purchase:history",
   ],
