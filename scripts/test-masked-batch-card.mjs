@@ -121,7 +121,13 @@ async function main() {
     process.exit(1);
   }
 
-  const payload = JSON.stringify(result.data);
+  // Check the `lines` array specifically, not the whole payload — the
+  // payload's top-level `flavourName` is an intentional, non-secret field
+  // (a mixer needs to know what they're mixing), and a flavour can
+  // legitimately be named after its own ingredients (e.g. "Paan Kiwi
+  // Mint"), which would make a whole-payload substring check false-positive
+  // on real production-like data without this ever being an actual leak.
+  const linesPayload = JSON.stringify(result.data.lines);
   assertTrue(
     "payload has no top-level 'name' field on any line",
     result.data.lines.every((l) => !("name" in l)),
@@ -136,8 +142,8 @@ async function main() {
   );
   for (const name of realNames) {
     assertTrue(
-      `payload does not contain the real material name "${name}" anywhere`,
-      !payload.includes(name),
+      `payload lines do not contain the real material name "${name}" anywhere`,
+      !linesPayload.includes(name),
     );
   }
   assertTrue(

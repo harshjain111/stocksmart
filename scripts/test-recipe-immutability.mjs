@@ -140,19 +140,40 @@ async function main() {
   );
 
   // 7. log_audit_event() records the actual caller via a real session, not
-  // a client-supplied id. Sign in as the admin test account for this check.
+  // a client-supplied id. Uses a throwaway admin created here rather than a
+  // fixed seeded account, so this test doesn't depend on which project it
+  // runs against.
+  const testPassword = `Immut-${Math.random().toString(36).slice(2)}-Aa1!`;
+  const testEmail = `recipe-immutability-test-${Date.now().toString(36)}@example.test`;
+  const { data: testUser, error: testUserErr } = await admin.auth.admin.createUser({
+    email: testEmail,
+    password: testPassword,
+    email_confirm: true,
+  });
+  if (testUserErr) throw new Error(`create test user: ${testUserErr.message}`);
+  const { data: hq } = await admin
+    .from("branches")
+    .select("id")
+    .eq("is_hq", true)
+    .single();
+  const { error: testProfileErr } = await admin.from("profiles").insert({
+    id: testUser.user.id,
+    full_name: "Recipe Immutability Test Admin",
+    role: "admin",
+    branch_id: hq.id,
+  });
+  if (testProfileErr) throw new Error(`create test profile: ${testProfileErr.message}`);
+
   const anon = createClient(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
-  const { data: signIn, error: signInErr } = await anon.auth.signInWithPassword(
-    {
-      email: "admin@smooxy.test",
-      password: "SmooxyAdmin!2026",
-    },
-  );
+  const { data: signIn, error: signInErr } = await anon.auth.signInWithPassword({
+    email: testEmail,
+    password: testPassword,
+  });
   if (signInErr)
-    throw new Error(`sign in as admin@smooxy.test: ${signInErr.message}`);
+    throw new Error(`sign in as ${testEmail}: ${signInErr.message}`);
 
   const { error: logErr } = await anon.rpc("log_audit_event", {
     p_action: "recipe_read",
@@ -189,6 +210,7 @@ async function main() {
     .from("raw_materials")
     .update({ is_active: false })
     .in("id", [rm1.id, rm2.id]);
+  await admin.auth.admin.deleteUser(testUser.user.id);
 
   console.log(
     `\n${failures.length === 0 ? "ALL PASSED" : `${failures.length} FAILED`}`,
