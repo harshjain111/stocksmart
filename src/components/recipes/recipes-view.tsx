@@ -505,7 +505,12 @@ function FlavourTableRow({
         )}
         onClick={onToggle}
       >
-        <td className="px-4 py-3">
+        <td
+          className={cn(
+            "border-l-2 border-transparent px-4 py-3 transition-colors",
+            expanded && "border-primary",
+          )}
+        >
           <div className="flex items-center gap-2.5">
             <span
               className={cn(
@@ -607,7 +612,7 @@ function FlavourTableRow({
       </tr>
       {expanded && (
         <tr className="border-b last:border-0">
-          <td colSpan={7} className="bg-muted/10 p-0">
+          <td colSpan={7} className="bg-muted/10 border-primary border-l-2 p-0">
             <ExpandedPanel
               flavour={flavour}
               onNewVersion={onNewVersion}
@@ -638,7 +643,7 @@ function ExpandedPanel({
   const cv = flavour.currentVersion;
 
   return (
-    <div className="grid gap-4 p-4 lg:grid-cols-[1.3fr_1.3fr_0.7fr]">
+    <div className="grid gap-4 p-4 pl-6 lg:grid-cols-[1.3fr_1.3fr_0.7fr]">
       <div className="bg-card rounded-lg border p-4">
         {cv ? (
           <>
