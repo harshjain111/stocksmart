@@ -71,13 +71,23 @@ type VersionDetail = {
 };
 
 // Cycled across a recipe's ingredient lines so the percentage breakdown
-// reads as a real chart rather than a wall of identical bars.
+// reads as a real chart. Tailwind only generates CSS for class names it can
+// find as literal text in source — these must stay written out in full
+// (never built at runtime via string concatenation/replace), one array per
+// CSS property, kept in the same order.
 const SEGMENT_COLORS = [
   "bg-primary",
   "bg-[var(--color-accent-solid)]",
   "bg-chart-3",
   "bg-chart-4",
   "bg-chart-5",
+];
+const SEGMENT_STROKE_COLORS = [
+  "stroke-primary",
+  "stroke-[var(--color-accent-solid)]",
+  "stroke-chart-3",
+  "stroke-chart-4",
+  "stroke-chart-5",
 ];
 
 function initials(name: string) {
@@ -103,7 +113,12 @@ function IngredientDonutChart({
   const segments = lines.map((line, i) => {
     const offset = cumulative;
     cumulative += line.percentage;
-    return { ...line, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length], offset };
+    return {
+      ...line,
+      color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+      strokeColor: SEGMENT_STROKE_COLORS[i % SEGMENT_STROKE_COLORS.length],
+      offset,
+    };
   });
 
   return (
@@ -131,10 +146,7 @@ function IngredientDonutChart({
             fill="none"
             strokeWidth="4"
             strokeLinecap="butt"
-            className={cn(
-              s.color.replace("bg-", "stroke-"),
-              "transition-all",
-            )}
+            className={cn(s.strokeColor, "transition-all")}
             strokeDasharray={`${(s.percentage / 100) * DONUT_CIRCUMFERENCE} ${DONUT_CIRCUMFERENCE}`}
             strokeDashoffset={-(s.offset / 100) * DONUT_CIRCUMFERENCE}
           />
