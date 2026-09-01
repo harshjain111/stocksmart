@@ -9,7 +9,6 @@ export default async function HomePage() {
   }
 
   const admin = createAdminClient();
-  const sections: HomeSection[] = [];
 
   const APPROVER_ROLES = ["admin", "branch_manager", "store_manager"];
   const RECEIVER_ROLES = ["admin", "branch_manager", "store_manager", "hod"];
@@ -18,13 +17,14 @@ export default async function HomePage() {
   const RATER_ROLES = ["admin", "senior_mixer"];
 
   // 1. Requisitions waiting on my approval.
-  if (APPROVER_ROLES.includes(session.role)) {
+  async function loadApprovals(): Promise<HomeSection | null> {
+    if (!APPROVER_ROLES.includes(session!.role)) return null;
     let query = admin
       .from("requisitions")
       .select("id, req_no, needed_by, departments(name)")
       .eq("status", "submitted");
-    if (session.role !== "admin") {
-      query = query.eq("branch_id", session.branchId ?? "");
+    if (session!.role !== "admin") {
+      query = query.eq("branch_id", session!.branchId ?? "");
     }
     const { data } = await query.order("created_at", { ascending: true });
 
@@ -34,7 +34,7 @@ export default async function HomePage() {
       needed_by: string;
       departments: { name: string } | null;
     };
-    sections.push({
+    return {
       key: "approvals",
       title: "Requisitions waiting on my approval",
       href: "/requisitions/approve",
@@ -43,19 +43,20 @@ export default async function HomePage() {
         label: r.req_no,
         detail: `${r.departments?.name ?? "Unknown department"} · needed by ${new Date(r.needed_by).toLocaleDateString("en-IN")}`,
       })),
-    });
+    };
   }
 
   // 2. Goods dispatched to me and not received.
-  if (RECEIVER_ROLES.includes(session.role)) {
+  async function loadReceive(): Promise<HomeSection | null> {
+    if (!RECEIVER_ROLES.includes(session!.role)) return null;
     let query = admin
       .from("transfers")
       .select(
         "id, transfer_no, to_department_id, dispatched_at, from_department:from_department_id(name), to_department:to_department_id(name)",
       )
       .eq("status", "dispatched");
-    if (session.role === "hod") {
-      const deptIds = session.departments.map((d) => d.id);
+    if (session!.role === "hod") {
+      const deptIds = session!.departments.map((d) => d.id);
       query =
         deptIds.length > 0
           ? query.in("to_department_id", deptIds)
@@ -63,8 +64,8 @@ export default async function HomePage() {
               "to_department_id",
               "00000000-0000-0000-0000-000000000000",
             );
-    } else if (session.role !== "admin") {
-      query = query.eq("branch_id", session.branchId ?? "");
+    } else if (session!.role !== "admin") {
+      query = query.eq("branch_id", session!.branchId ?? "");
     }
     const { data } = await query.order("dispatched_at", { ascending: true });
 
@@ -75,7 +76,7 @@ export default async function HomePage() {
       from_department: { name: string } | null;
       to_department: { name: string } | null;
     };
-    sections.push({
+    return {
       key: "receive",
       title: "Goods dispatched to me, not yet received",
       href: "/send-receive/receive",
@@ -84,24 +85,25 @@ export default async function HomePage() {
         label: t.transfer_no,
         detail: `${t.from_department?.name ?? "?"} → ${t.to_department?.name ?? "?"} · dispatched ${new Date(t.dispatched_at).toLocaleDateString("en-IN")}`,
       })),
-    });
+    };
   }
 
   // 3. Items below par in my departments (flavours only, matching Setup/Stock).
-  if (STOCK_ROLES.includes(session.role)) {
+  async function loadBelowPar(): Promise<HomeSection | null> {
+    if (!STOCK_ROLES.includes(session!.role)) return null;
     let deptQuery = admin
       .from("departments")
       .select("id, name")
       .eq("is_active", true)
       .eq("holds_mixed", true);
-    if (session.role === "hod") {
-      const deptIds = session.departments.map((d) => d.id);
+    if (session!.role === "hod") {
+      const deptIds = session!.departments.map((d) => d.id);
       deptQuery =
         deptIds.length > 0
           ? deptQuery.in("id", deptIds)
           : deptQuery.eq("id", "00000000-0000-0000-0000-000000000000");
-    } else if (session.role !== "admin") {
-      deptQuery = deptQuery.eq("branch_id", session.branchId ?? "");
+    } else if (session!.role !== "admin") {
+      deptQuery = deptQuery.eq("branch_id", session!.branchId ?? "");
     }
     const { data: departments } = await deptQuery;
     const departmentIds = (departments ?? []).map((d) => d.id);
@@ -144,7 +146,7 @@ export default async function HomePage() {
         : { data: [] };
     const flavourById = new Map((flavours ?? []).map((f) => [f.id, f]));
 
-    sections.push({
+    return {
       key: "below-par",
       title: "Items below par in my departments",
       href: "/stock",
@@ -160,19 +162,20 @@ export default async function HomePage() {
           detail: `${departmentNameById.get(p.department_id) ?? "Unknown department"} · have ${(currentG / 1000).toFixed(1)} kg of ${(p.par_qty_g / 1000).toFixed(1)} kg par`,
         };
       }),
-    });
+    };
   }
 
   // 4. In-transit items ageing past 3 days.
-  if (TRANSIT_ROLES.includes(session.role)) {
+  async function loadAgeingTransit(): Promise<HomeSection | null> {
+    if (!TRANSIT_ROLES.includes(session!.role)) return null;
     let query = admin
       .from("transfers")
       .select(
         "id, transfer_no, dispatched_at, from_department:from_department_id(name), to_department:to_department_id(name)",
       )
       .eq("status", "dispatched");
-    if (session.role !== "admin") {
-      query = query.eq("branch_id", session.branchId ?? "");
+    if (session!.role !== "admin") {
+      query = query.eq("branch_id", session!.branchId ?? "");
     }
     const { data } = await query;
 
@@ -194,7 +197,7 @@ export default async function HomePage() {
       .filter((t) => t.ageDays > 3)
       .sort((a, b) => b.ageDays - a.ageDays);
 
-    sections.push({
+    return {
       key: "ageing-transit",
       title: "In-transit items ageing past 3 days",
       href: "/send-receive/in-transit",
@@ -203,18 +206,19 @@ export default async function HomePage() {
         label: t.transfer_no,
         detail: `${t.from_department?.name ?? "?"} → ${t.to_department?.name ?? "?"} · ${t.ageDays} days`,
       })),
-    });
+    };
   }
 
   // 5. Batches waiting to be rated.
-  if (RATER_ROLES.includes(session.role)) {
+  async function loadRateBatches(): Promise<HomeSection | null> {
+    if (!RATER_ROLES.includes(session!.role)) return null;
     let query = admin
       .from("batches")
       .select("id, batch_no, mixed_at, flavours(name)")
       .eq("status", "confirmed")
       .is("rating", null);
-    if (session.role !== "admin") {
-      query = query.eq("branch_id", session.branchId ?? "");
+    if (session!.role !== "admin") {
+      query = query.eq("branch_id", session!.branchId ?? "");
     }
     const { data } = await query.order("mixed_at", { ascending: true });
 
@@ -224,7 +228,7 @@ export default async function HomePage() {
       mixed_at: string | null;
       flavours: { name: string } | null;
     };
-    sections.push({
+    return {
       key: "rate-batches",
       title: "Batches waiting to be rated",
       href: "/mix/past-batches",
@@ -233,8 +237,18 @@ export default async function HomePage() {
         label: b.batch_no,
         detail: `${b.flavours?.name ?? "Unknown flavour"}${b.mixed_at ? ` · mixed ${new Date(b.mixed_at).toLocaleDateString("en-IN")}` : ""}`,
       })),
-    });
+    };
   }
+
+  const sections = (
+    await Promise.all([
+      loadApprovals(),
+      loadReceive(),
+      loadBelowPar(),
+      loadAgeingTransit(),
+      loadRateBatches(),
+    ])
+  ).filter((s): s is HomeSection => s !== null);
 
   return <HomeView fullName={session.fullName} sections={sections} />;
 }

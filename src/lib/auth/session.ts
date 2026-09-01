@@ -55,19 +55,20 @@ export async function getSession(): Promise<Session | null> {
 
   const admin = createAdminClient();
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("full_name, role, is_active, branch_id, branches(name)")
-    .eq("id", user.id)
-    .single<ProfileRow>();
+  const [{ data: profile }, { data: userDepartments }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("full_name, role, is_active, branch_id, branches(name)")
+      .eq("id", user.id)
+      .single<ProfileRow>(),
+    admin
+      .from("user_departments")
+      .select("departments(id, name, branch_id)")
+      .eq("profile_id", user.id)
+      .returns<UserDepartmentRow[]>(),
+  ]);
 
   if (!profile || !profile.is_active) return null;
-
-  const { data: userDepartments } = await admin
-    .from("user_departments")
-    .select("departments(id, name, branch_id)")
-    .eq("profile_id", user.id)
-    .returns<UserDepartmentRow[]>();
 
   return {
     userId: user.id,

@@ -22,12 +22,6 @@ export default async function StockPage() {
 
   const admin = createAdminClient();
 
-  const { data: branches } = await admin
-    .from("branches")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
-
   let departmentsQuery = admin
     .from("departments")
     .select("id, name, branch_id, holds_raw, holds_mixed")
@@ -43,23 +37,26 @@ export default async function StockPage() {
     departmentsQuery = departmentsQuery.eq("branch_id", session.branchId);
   }
 
-  const { data: departments } = await departmentsQuery
-    .order("name")
-    .returns<DepartmentRow[]>();
+  const [{ data: branches }, { data: departments }, { data: rawMaterials }, { data: flavours }] =
+    await Promise.all([
+      admin
+        .from("branches")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name"),
+      departmentsQuery.order("name").returns<DepartmentRow[]>(),
+      admin
+        .from("raw_materials")
+        .select("id, code, name")
+        .eq("is_active", true)
+        .order("name"),
+      admin
+        .from("flavours")
+        .select("id, code, name")
+        .eq("is_active", true)
+        .order("name"),
+    ]);
   const visibleDepartmentIds = (departments ?? []).map((d) => d.id);
-
-  const [{ data: rawMaterials }, { data: flavours }] = await Promise.all([
-    admin
-      .from("raw_materials")
-      .select("id, code, name")
-      .eq("is_active", true)
-      .order("name"),
-    admin
-      .from("flavours")
-      .select("id, code, name")
-      .eq("is_active", true)
-      .order("name"),
-  ]);
 
   const [{ data: balances }, { data: parLevels }] =
     visibleDepartmentIds.length > 0
