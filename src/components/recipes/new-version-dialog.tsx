@@ -78,8 +78,14 @@ export function NewVersionDialog({
   const [newMaterialOpen, setNewMaterialOpen] = React.useState(false);
 
   React.useEffect(() => {
+    // Only re-seed when the dialog transitions to open, not on every
+    // `materials` prop change — creating a material/supplier inline calls
+    // revalidatePath, which hands this dialog a fresh `materials` reference
+    // while it's still open, and re-seeding then would blow away in-flight
+    // edits to `lines`.
     if (open) setLocalMaterials(materials);
-  }, [open, materials]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const isFirstVersion = nextVersionNo === 1;
 
@@ -349,12 +355,17 @@ function NewMaterialDialog({
   });
 
   React.useEffect(() => {
+    // Only re-seed/reset on the open transition — see the matching note in
+    // NewVersionDialog. A `suppliers` (or `reset`) dependency here would
+    // wipe the in-progress name/supplier selection the moment the nested
+    // "new supplier" dialog's own revalidatePath refreshes this prop.
     if (open) {
       setLocalSuppliers(suppliers);
       reset({ name: "", defaultSupplierId: null });
       setServerError(null);
     }
-  }, [open, suppliers, reset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const defaultSupplierId = watch("defaultSupplierId");
 
