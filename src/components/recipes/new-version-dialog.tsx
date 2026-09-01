@@ -187,6 +187,11 @@ export function NewVersionDialog({
             {lines.map((line, index) => (
               <div key={index} className="flex items-center gap-2">
                 <Select
+                  // Same Base UI Select quirk as the supplier picker below —
+                  // remount when a material gets programmatically assigned
+                  // to this line (e.g. auto-selected after being created
+                  // inline) rather than picked by the user from this Select.
+                  key={line.rawMaterialId || `empty-${index}`}
                   items={localMaterials.map((m) => ({ value: m.id, label: m.name }))}
                   value={line.rawMaterialId}
                   onValueChange={(v) =>
@@ -417,6 +422,12 @@ function NewMaterialDialog({
             <Label>Default supplier</Label>
             <div className="flex gap-2">
               <Select
+                // Remount when the programmatically-set value changes —
+                // Base UI's Select only reflects `value` on mount / via its
+                // own onValueChange, not on a later external prop change,
+                // which is exactly what happens when the nested "new
+                // supplier" dialog hands back an id to auto-select here.
+                key={selectedSupplierId ?? "none"}
                 items={localSuppliers.map((s) => ({ value: s.id, label: s.name }))}
                 value={selectedSupplierId ?? undefined}
                 onValueChange={(v) => setSelectedSupplierId(v ?? null)}
