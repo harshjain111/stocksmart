@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
 import { createRecipeVersion } from "@/app/(app)/recipes/actions";
@@ -345,7 +345,7 @@ function NewMaterialDialog({
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     reset,
     formState: { errors, isSubmitting },
@@ -366,8 +366,6 @@ function NewMaterialDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  const defaultSupplierId = watch("defaultSupplierId");
 
   async function onSubmit(values: CreateMaterialInput) {
     setServerError(null);
@@ -412,22 +410,28 @@ function NewMaterialDialog({
           <div className="grid gap-1.5">
             <Label>Default supplier</Label>
             <div className="flex gap-2">
-              <Select
-                items={localSuppliers.map((s) => ({ value: s.id, label: s.name }))}
-                value={defaultSupplierId ?? undefined}
-                onValueChange={(v) => setValue("defaultSupplierId", v ?? null)}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="None yet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {localSuppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                control={control}
+                name="defaultSupplierId"
+                render={({ field }) => (
+                  <Select
+                    items={localSuppliers.map((s) => ({ value: s.id, label: s.name }))}
+                    value={field.value ?? undefined}
+                    onValueChange={(v) => field.onChange(v ?? null)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="None yet" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {localSuppliers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               <Button
                 type="button"
                 variant="outline"
