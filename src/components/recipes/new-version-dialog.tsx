@@ -2,16 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
 import { createRecipeVersion } from "@/app/(app)/recipes/actions";
 import { createMaterial } from "@/app/(app)/setup/materials/actions";
 import { createSupplier } from "@/app/(app)/setup/suppliers/actions";
-import {
-  createMaterialSchema,
-  type CreateMaterialInput,
-} from "@/lib/validation/materials";
+import { createMaterialSchema } from "@/lib/validation/materials";
 import {
   createSupplierSchema,
   type CreateSupplierInput,
@@ -342,16 +339,21 @@ function NewMaterialDialog({
   const [localSuppliers, setLocalSuppliers] = React.useState(suppliers);
   const [newSupplierOpen, setNewSupplierOpen] = React.useState(false);
   const [serverError, setServerError] = React.useState<string | null>(null);
+  // Plain state rather than an RHF-registered field — this only ever needs
+  // to drive the Select's display and get merged into the submit payload,
+  // and a Controller-managed field wasn't reliably picking up the value set
+  // by the nested "new supplier" dialog's onCreated callback.
+  const [selectedSupplierId, setSelectedSupplierId] = React.useState<
+    string | null
+  >(null);
   const {
     register,
     handleSubmit,
-    control,
-    setValue,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<CreateMaterialInput>({
-    resolver: zodResolver(createMaterialSchema),
-    defaultValues: { name: "", defaultSupplierId: null },
+  } = useForm<{ name: string }>({
+    resolver: zodResolver(createMaterialSchema.pick({ name: true })),
+    defaultValues: { name: "" },
   });
 
   React.useEffect(() => {
@@ -361,15 +363,19 @@ function NewMaterialDialog({
     // "new supplier" dialog's own revalidatePath refreshes this prop.
     if (open) {
       setLocalSuppliers(suppliers);
-      reset({ name: "", defaultSupplierId: null });
+      setSelectedSupplierId(null);
+      reset({ name: "" });
       setServerError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  async function onSubmit(values: CreateMaterialInput) {
+  async function onSubmit(values: { name: string }) {
     setServerError(null);
-    const result = await createMaterial(values);
+    const result = await createMaterial({
+      name: values.name,
+      defaultSupplierId: selectedSupplierId,
+    });
     if (!result.success) {
       setServerError(result.error);
       return;
@@ -381,7 +387,7 @@ function NewMaterialDialog({
 
   function onSupplierCreated(supplier: Supplier) {
     setLocalSuppliers((prev) => [...prev, supplier].sort((a, b) => a.name.localeCompare(b.name)));
-    setValue("defaultSupplierId", supplier.id);
+    setSelectedSupplierId(supplier.id);
     setNewSupplierOpen(false);
   }
 
@@ -410,28 +416,22 @@ function NewMaterialDialog({
           <div className="grid gap-1.5">
             <Label>Default supplier</Label>
             <div className="flex gap-2">
-              <Controller
-                control={control}
-                name="defaultSupplierId"
-                render={({ field }) => (
-                  <Select
-                    items={localSuppliers.map((s) => ({ value: s.id, label: s.name }))}
-                    value={field.value ?? undefined}
-                    onValueChange={(v) => field.onChange(v ?? null)}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="None yet" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {localSuppliers.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
+              <Select
+                items={localSuppliers.map((s) => ({ value: s.id, label: s.name }))}
+                value={selectedSupplierId ?? undefined}
+                onValueChange={(v) => setSelectedSupplierId(v ?? null)}
+              >
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="None yet" />
+                </SelectTrigger>
+                <SelectContent>
+                  {localSuppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 type="button"
                 variant="outline"
