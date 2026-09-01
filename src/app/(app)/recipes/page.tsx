@@ -21,6 +21,7 @@ export default async function RecipesPage() {
     { data: versions },
     { data: materials },
     { data: batches },
+    { data: suppliers },
   ] = await Promise.all([
     admin
       .from("flavours")
@@ -36,6 +37,11 @@ export default async function RecipesPage() {
       .eq("is_active", true)
       .order("name"),
     admin.from("batches").select("recipe_version_id"),
+    admin
+      .from("suppliers")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name"),
   ]);
 
   const batchCountByVersionId = new Map<string, number>();
@@ -55,6 +61,7 @@ export default async function RecipesPage() {
       flavours={flavours ?? []}
       versions={versionSummaries}
       materials={materials ?? []}
+      suppliers={suppliers ?? []}
       canCreateVersion={session.role === "admin"}
     />
   );

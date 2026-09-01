@@ -60,6 +60,7 @@ type VersionSummary = {
 };
 
 type Material = { id: string; name: string };
+type Supplier = { id: string; name: string };
 
 type VersionDetail = {
   note: string;
@@ -88,15 +89,88 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+// r chosen so 2πr ≈ 100 — each segment's stroke-dasharray can then use its
+// percentage directly, no extra math to convert to arc length.
+const DONUT_RADIUS = 15.915;
+const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
+
+function IngredientDonutChart({
+  lines,
+}: {
+  lines: { materialName: string; percentage: number }[];
+}) {
+  let cumulative = 0;
+  const segments = lines.map((line, i) => {
+    const offset = cumulative;
+    cumulative += line.percentage;
+    return { ...line, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length], offset };
+  });
+
+  return (
+    <div className="flex flex-col items-center gap-6 sm:flex-row">
+      <svg
+        viewBox="0 0 36 36"
+        className="size-36 shrink-0 -rotate-90"
+        role="img"
+        aria-label="Ingredient percentage breakdown"
+      >
+        <circle
+          cx="18"
+          cy="18"
+          r={DONUT_RADIUS}
+          fill="none"
+          className="stroke-muted"
+          strokeWidth="4"
+        />
+        {segments.map((s) => (
+          <circle
+            key={s.materialName}
+            cx="18"
+            cy="18"
+            r={DONUT_RADIUS}
+            fill="none"
+            strokeWidth="4"
+            strokeLinecap="butt"
+            className={cn(
+              s.color.replace("bg-", "stroke-"),
+              "transition-all",
+            )}
+            strokeDasharray={`${(s.percentage / 100) * DONUT_CIRCUMFERENCE} ${DONUT_CIRCUMFERENCE}`}
+            strokeDashoffset={-(s.offset / 100) * DONUT_CIRCUMFERENCE}
+          />
+        ))}
+      </svg>
+      <div className="grid w-full gap-2.5">
+        {segments.map((s) => (
+          <div
+            key={s.materialName}
+            className="flex items-center justify-between gap-2 text-sm"
+          >
+            <span className="flex items-center gap-2">
+              <span
+                className={cn("size-2.5 shrink-0 rounded-full", s.color)}
+              />
+              <span className="font-medium">{s.materialName}</span>
+            </span>
+            <span className="font-qty">{s.percentage}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function RecipesView({
   flavours,
   versions,
   materials,
+  suppliers,
   canCreateVersion,
 }: {
   flavours: Flavour[];
   versions: VersionSummary[];
   materials: Material[];
+  suppliers: Supplier[];
   canCreateVersion: boolean;
 }) {
   const router = useRouter();
@@ -333,32 +407,7 @@ export function RecipesView({
                       </div>
                     ) : detail ? (
                       <>
-                        <div className="grid gap-3">
-                          {detail.lines.map((line, i) => (
-                            <div
-                              key={line.materialName}
-                              className="grid gap-1.5"
-                            >
-                              <div className="flex items-baseline justify-between text-sm">
-                                <span className="font-medium">
-                                  {line.materialName}
-                                </span>
-                                <span className="font-qty">
-                                  {line.percentage}%
-                                </span>
-                              </div>
-                              <div className="bg-muted h-2.5 overflow-hidden rounded-full">
-                                <div
-                                  className={cn(
-                                    "h-full rounded-full transition-all",
-                                    SEGMENT_COLORS[i % SEGMENT_COLORS.length],
-                                  )}
-                                  style={{ width: `${line.percentage}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                        <IngredientDonutChart lines={detail.lines} />
                         <div className="border-t pt-3 text-sm">
                           <p className="text-muted-foreground italic">
                             &ldquo;{detail.note}&rdquo;
@@ -413,6 +462,7 @@ export function RecipesView({
           flavourName={selectedFlavour.name}
           nextVersionNo={nextVersionNo}
           materials={materials}
+          suppliers={suppliers}
           prefillWastagePct={detail?.wastagePct ?? 2}
           prefillLines={
             detail?.lines.map((l) => ({

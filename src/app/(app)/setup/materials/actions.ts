@@ -12,7 +12,9 @@ import {
   type UpdateMaterialInput,
 } from "@/lib/validation/materials";
 
-type ActionResult = { success: true } | { success: false; error: string };
+type ActionResult<T = undefined> =
+  | { success: true; data?: T }
+  | { success: false; error: string };
 
 async function requireMaterialAccess() {
   const session = await getSession();
@@ -24,7 +26,7 @@ async function requireMaterialAccess() {
 
 export async function createMaterial(
   input: CreateMaterialInput,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ id: string }>> {
   const session = await requireMaterialAccess();
   if (!session) return { success: false, error: "Access required." };
 
@@ -34,16 +36,23 @@ export async function createMaterial(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("raw_materials").insert({
-    name: parsed.data.name,
-    default_supplier_id: parsed.data.defaultSupplierId,
-    created_by: session.userId,
-  });
+  const { data: material, error } = await supabase
+    .from("raw_materials")
+    .insert({
+      name: parsed.data.name,
+      default_supplier_id: parsed.data.defaultSupplierId,
+      created_by: session.userId,
+    })
+    .select("id")
+    .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error || !material) {
+    return { success: false, error: error?.message ?? "Could not create material." };
+  }
 
   revalidatePath("/setup/materials");
-  return { success: true };
+  revalidatePath("/recipes");
+  return { success: true, data: { id: material.id } };
 }
 
 export async function updateMaterial(

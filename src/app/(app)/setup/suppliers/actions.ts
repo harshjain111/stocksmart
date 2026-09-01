@@ -11,7 +11,9 @@ import {
   type UpdateSupplierInput,
 } from "@/lib/validation/suppliers";
 
-type ActionResult = { success: true } | { success: false; error: string };
+type ActionResult<T = undefined> =
+  | { success: true; data?: T }
+  | { success: false; error: string };
 
 async function requireSupplierAccess() {
   const session = await getSession();
@@ -23,7 +25,7 @@ async function requireSupplierAccess() {
 
 export async function createSupplier(
   input: CreateSupplierInput,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ id: string }>> {
   const session = await requireSupplierAccess();
   if (!session) return { success: false, error: "Access required." };
 
@@ -33,20 +35,28 @@ export async function createSupplier(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("suppliers").insert({
-    name: parsed.data.name,
-    area: parsed.data.area || null,
-    contact_person: parsed.data.contactPerson || null,
-    phone: parsed.data.phone || null,
-    gstin: parsed.data.gstin || null,
-    notes: parsed.data.notes || null,
-    created_by: session.userId,
-  });
+  const { data: supplier, error } = await supabase
+    .from("suppliers")
+    .insert({
+      name: parsed.data.name,
+      area: parsed.data.area || null,
+      contact_person: parsed.data.contactPerson || null,
+      phone: parsed.data.phone || null,
+      gstin: parsed.data.gstin || null,
+      notes: parsed.data.notes || null,
+      created_by: session.userId,
+    })
+    .select("id")
+    .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error || !supplier) {
+    return { success: false, error: error?.message ?? "Could not create supplier." };
+  }
 
   revalidatePath("/setup/suppliers");
-  return { success: true };
+  revalidatePath("/setup/materials");
+  revalidatePath("/recipes");
+  return { success: true, data: { id: supplier.id } };
 }
 
 export async function updateSupplier(
