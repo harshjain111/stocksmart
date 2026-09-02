@@ -23,6 +23,14 @@ A multi-branch inventory system for Smokzy: raw materials are bought, mixed into
 
 No other dependencies without asking.
 
+`npm run dev` deliberately does **not** use Turbopack. Turbopack's dev HMR
+leaves the client module graph out of step with the SSR one, which shifts
+React's `useId` tree positions and makes every Base UI component that calls
+`useId` report a hydration mismatch after any edit — noise that buries real
+hydration bugs. Production builds are unaffected and still use Turbopack.
+`npm run dev:turbo` is there if you want the faster cold compiles and can
+live with the warnings.
+
 ---
 
 ## The ten rules that must never be broken
