@@ -22,6 +22,7 @@ import {
 } from "@/app/(app)/purchases/orders/[poId]/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusTag } from "@/components/shared/status-tag";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -178,6 +179,117 @@ export function PoDetailView({
     }));
   }
 
+  const lineColumns: DataTableColumn<PoLine>[] = [
+    {
+      key: "item",
+      header: "Material",
+      cardRole: "title",
+      className: "whitespace-nowrap",
+      render: (line) => (
+        <>
+          {line.itemName}
+          {line.itemCode && (
+            <span className="text-muted-foreground"> · {line.itemCode}</span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "qty",
+      header: "Quantity (kg)",
+      numeric: true,
+      render: (line) =>
+        isDraft && canEdit ? (
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            aria-label={`Quantity for ${line.itemName}`}
+            className="font-qty ml-auto w-24 text-right"
+            value={qtyValues[line.id] ?? ""}
+            onChange={(e) =>
+              setQtyValues((prev) => ({ ...prev, [line.id]: e.target.value }))
+            }
+            onBlur={() => handleQtyBlur(line.id)}
+          />
+        ) : (
+          <span className="font-qty whitespace-nowrap">
+            {formatGrams(line.qtyG)}
+          </span>
+        ),
+    },
+    {
+      key: "rate",
+      header: "Rate",
+      numeric: true,
+      render: (line) => (
+        <>
+          {canEdit ? (
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              placeholder="Blank"
+              aria-label={`Rate for ${line.itemName}`}
+              className="ml-auto w-24 text-right"
+              value={rateValues[line.id] ?? ""}
+              onChange={(e) =>
+                setRateValues((prev) => ({ ...prev, [line.id]: e.target.value }))
+              }
+              onBlur={() => handleRateBlur(line.id)}
+            />
+          ) : (
+            <span className="whitespace-nowrap">
+              {line.rate != null ? `₹${line.rate}` : "—"}
+            </span>
+          )}
+          {savedLineIds.has(line.id) && (
+            <span className="text-primary block text-xs">Saved</span>
+          )}
+        </>
+      ),
+    },
+  ];
+
+  const linkedGrnColumns: DataTableColumn<LinkedGrn>[] = [
+    {
+      key: "grnNo",
+      header: "GRN",
+      cardRole: "title",
+      render: (g) => <span className="font-medium">{g.grnNo}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cardRole: "badge",
+      render: (g) => <StatusTag status={g.status} />,
+    },
+    {
+      key: "date",
+      header: "Date",
+      className: "text-muted-foreground whitespace-nowrap",
+      render: (g) =>
+        g.postedAt ? new Date(g.postedAt).toLocaleDateString("en-IN") : "—",
+    },
+    {
+      key: "received",
+      header: "Received",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (g) => formatGrams(g.receivedG),
+    },
+    {
+      key: "transport",
+      header: "Transport",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (g) =>
+        g.transportationCost != null ? `₹${g.transportationCost}` : "—",
+    },
+  ];
+
   async function handleExpectedDateBlur() {
     const value = expectedDate.trim() === "" ? null : expectedDate;
     const result = await setExpectedDeliveryDate(detail.id, value);
@@ -313,90 +425,11 @@ export function PoDetailView({
 
       <Card>
         <CardContent className="grid gap-4">
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-muted-foreground px-3 py-2 text-left font-medium">
-                    Material
-                  </th>
-                  <th className="text-muted-foreground px-3 py-2 text-right font-medium">
-                    Quantity (kg)
-                  </th>
-                  <th className="text-muted-foreground px-3 py-2 text-right font-medium">
-                    Rate
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.lines.map((line) => (
-                  <tr key={line.id} className="border-b last:border-0">
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {line.itemName}
-                      {line.itemCode && (
-                        <span className="text-muted-foreground">
-                          {" "}
-                          · {line.itemCode}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {isDraft && canEdit ? (
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.1"
-                          min="0"
-                          className="font-qty ml-auto w-24 text-right"
-                          value={qtyValues[line.id] ?? ""}
-                          onChange={(e) =>
-                            setQtyValues((prev) => ({
-                              ...prev,
-                              [line.id]: e.target.value,
-                            }))
-                          }
-                          onBlur={() => handleQtyBlur(line.id)}
-                        />
-                      ) : (
-                        <span className="font-qty whitespace-nowrap">
-                          {formatGrams(line.qtyG)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {canEdit ? (
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.01"
-                          min="0"
-                          placeholder="Blank"
-                          className="ml-auto w-24 text-right"
-                          value={rateValues[line.id] ?? ""}
-                          onChange={(e) =>
-                            setRateValues((prev) => ({
-                              ...prev,
-                              [line.id]: e.target.value,
-                            }))
-                          }
-                          onBlur={() => handleRateBlur(line.id)}
-                        />
-                      ) : (
-                        <span className="whitespace-nowrap">
-                          {line.rate != null ? `₹${line.rate}` : "—"}
-                        </span>
-                      )}
-                      {savedLineIds.has(line.id) && (
-                        <span className="text-primary block text-xs">
-                          Saved
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={lineColumns}
+            data={detail.lines}
+            getRowKey={(line) => line.id}
+          />
 
           {!isDraft && (
             <p className="text-muted-foreground text-sm">
@@ -531,46 +564,17 @@ export function PoDetailView({
         <Card>
           <CardContent className="grid gap-3">
             <p className="text-sm font-medium">Linked GRNs</p>
-            {detail.linkedGrns.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Nothing received against this order yet.
-              </p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground border-b text-left text-xs">
-                    <th className="pb-1.5 font-medium">GRN</th>
-                    <th className="pb-1.5 font-medium">Date</th>
-                    <th className="pb-1.5 text-right font-medium">Received</th>
-                    <th className="pb-1.5 text-right font-medium">Transport</th>
-                    <th className="pb-1.5 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.linkedGrns.map((g) => (
-                    <tr key={g.id} className="border-b last:border-0">
-                      <td className="py-1.5 font-medium">{g.grnNo}</td>
-                      <td className="text-muted-foreground py-1.5 whitespace-nowrap">
-                        {g.postedAt
-                          ? new Date(g.postedAt).toLocaleDateString("en-IN")
-                          : "—"}
-                      </td>
-                      <td className="font-qty py-1.5 text-right whitespace-nowrap">
-                        {formatGrams(g.receivedG)}
-                      </td>
-                      <td className="font-qty py-1.5 text-right whitespace-nowrap">
-                        {g.transportationCost != null
-                          ? `₹${g.transportationCost}`
-                          : "—"}
-                      </td>
-                      <td className="py-1.5">
-                        <StatusTag status={g.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            <DataTable
+              columns={linkedGrnColumns}
+              data={detail.linkedGrns}
+              getRowKey={(g) => g.id}
+              embedded
+              emptyState={
+                <p className="text-muted-foreground text-sm">
+                  Nothing received against this order yet.
+                </p>
+              }
+            />
           </CardContent>
         </Card>
       </div>

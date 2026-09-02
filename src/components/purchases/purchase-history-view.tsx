@@ -47,6 +47,7 @@ type SupplierSummary = {
 
 type MaterialSummary = {
   rawMaterialId: string;
+  itemType: "raw" | "flavour";
   name: string;
   code: string | null;
   orderCount: number;
@@ -107,7 +108,12 @@ export function PurchaseHistoryView({
   }, [supplierId, rawMaterialId, from, to]);
 
   const supplierColumns: DataTableColumn<SupplierSummary>[] = [
-    { key: "supplier", header: "Supplier", render: (s) => s.supplierName },
+    {
+      key: "supplier",
+      header: "Supplier",
+      cardRole: "title",
+      render: (s) => s.supplierName,
+    },
     {
       key: "orders",
       header: "Orders",
@@ -137,10 +143,14 @@ export function PurchaseHistoryView({
     {
       key: "material",
       header: "Material",
+      cardRole: "title",
       render: (m) => (
         <>
           {m.name}
           {m.code && <span className="text-muted-foreground"> · {m.code}</span>}
+          {m.itemType === "flavour" && (
+            <span className="text-info ml-1.5 text-xs">Flavour</span>
+          )}
         </>
       ),
     },
@@ -180,12 +190,18 @@ export function PurchaseHistoryView({
     {
       key: "type",
       header: "Type",
-      render: (r) => (r.type === "order" ? "Order" : "Receipt"),
+      cardRole: "badge",
+      render: (r) => (
+        <span className="text-muted-foreground text-xs">
+          {r.type === "order" ? "Order" : "Receipt"}
+        </span>
+      ),
     },
     { key: "supplier", header: "Supplier", render: (r) => r.supplierName },
     {
       key: "material",
       header: "Material",
+      cardRole: "title",
       render: (r) => (
         <>
           {r.materialName}

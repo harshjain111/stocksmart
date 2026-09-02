@@ -3,6 +3,7 @@ import { FileText, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTag } from "@/components/shared/status-tag";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { buttonVariants } from "@/components/ui/button";
 
 export type GrnRow = {
@@ -39,6 +40,53 @@ export function GoodsReceivedView({
   grns: GrnRow[];
   isAdmin: boolean;
 }) {
+  const columns: DataTableColumn<GrnRow>[] = [
+    {
+      key: "grnNo",
+      header: "GRN Number",
+      cardRole: "title",
+      render: (g) => <span className="font-medium">{g.grnNo}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cardRole: "badge",
+      render: (g) => <StatusTag status={g.status} />,
+    },
+    { key: "poNo", header: "PO Number", render: (g) => g.poNo },
+    {
+      key: "date",
+      header: "Date",
+      className: "whitespace-nowrap",
+      render: (g) => fmtDate(g.date),
+    },
+    ...(isAdmin
+      ? [
+          {
+            key: "branch",
+            header: "Branch",
+            render: (g: GrnRow) => g.branchName,
+          },
+        ]
+      : []),
+    { key: "items", header: "Items", render: (g) => g.itemCount },
+    {
+      key: "transport",
+      header: "Transport Cost",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (g) =>
+        g.transportCost != null ? formatRupees(g.transportCost) : "—",
+    },
+    {
+      key: "value",
+      header: "Value",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (g) => formatRupees(g.valueRupees),
+    },
+  ];
+
   return (
     <div className="grid gap-6">
       <PageHeader
@@ -51,54 +99,18 @@ export function GoodsReceivedView({
         }
       />
 
-      {grns.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title="No goods received yet"
-          description="Receive against a sent purchase order from Send & receive — it shows up here once posted."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 border-b text-left text-xs">
-                <th className="px-4 py-2.5 font-medium text-muted-foreground">GRN Number</th>
-                <th className="px-4 py-2.5 font-medium text-muted-foreground">PO Number</th>
-                <th className="px-4 py-2.5 font-medium text-muted-foreground">Date</th>
-                {isAdmin && (
-                  <th className="px-4 py-2.5 font-medium text-muted-foreground">Branch</th>
-                )}
-                <th className="px-4 py-2.5 font-medium text-muted-foreground">Items</th>
-                <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">
-                  Transport Cost
-                </th>
-                <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Value</th>
-                <th className="px-4 py-2.5 font-medium text-muted-foreground">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grns.map((g) => (
-                <tr key={g.id} className="border-b last:border-0">
-                  <td className="px-4 py-2.5 font-medium">{g.grnNo}</td>
-                  <td className="px-4 py-2.5">{g.poNo}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">{fmtDate(g.date)}</td>
-                  {isAdmin && <td className="px-4 py-2.5">{g.branchName}</td>}
-                  <td className="px-4 py-2.5">{g.itemCount}</td>
-                  <td className="font-qty px-4 py-2.5 text-right whitespace-nowrap">
-                    {g.transportCost != null ? formatRupees(g.transportCost) : "—"}
-                  </td>
-                  <td className="font-qty px-4 py-2.5 text-right whitespace-nowrap">
-                    {formatRupees(g.valueRupees)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <StatusTag status={g.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        data={grns}
+        getRowKey={(g) => g.id}
+        emptyState={
+          <EmptyState
+            icon={FileText}
+            title="No goods received yet"
+            description="Receive against a sent purchase order from Send & receive — it shows up here once posted."
+          />
+        }
+      />
     </div>
   );
 }

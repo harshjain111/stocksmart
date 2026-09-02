@@ -395,6 +395,7 @@ function BuyGroupCard({
             {
               key: "material",
               header: "Item",
+              cardRole: "title" as const,
               render: (l) => (
                 <>
                   {l.itemName}

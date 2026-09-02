@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { BarChart3 } from "lucide-react";
 
 export type ReportsData = {
@@ -22,6 +23,44 @@ function formatRupees(value: number): string {
 function formatKg(grams: number): string {
   return `${(grams / 1000).toFixed(0)} kg`;
 }
+
+type ItemRow = ReportsData["itemWise"][number];
+type BranchRow = ReportsData["branchWise"][number];
+
+const itemColumns: DataTableColumn<ItemRow>[] = [
+  { key: "name", header: "Item", cardRole: "title", render: (i) => i.name },
+  {
+    key: "type",
+    header: "Type",
+    className: "text-muted-foreground capitalize",
+    render: (i) => (i.type === "raw" ? "Raw Material" : "Flavour"),
+  },
+  {
+    key: "qty",
+    header: "Quantity",
+    numeric: true,
+    className: "whitespace-nowrap",
+    render: (i) => formatKg(i.qtyG),
+  },
+  {
+    key: "value",
+    header: "Value",
+    numeric: true,
+    className: "whitespace-nowrap",
+    render: (i) => formatRupees(i.valueRupees),
+  },
+];
+
+const branchColumns: DataTableColumn<BranchRow>[] = [
+  { key: "name", header: "Branch", cardRole: "title", render: (b) => b.name },
+  {
+    key: "value",
+    header: "Value",
+    numeric: true,
+    className: "whitespace-nowrap",
+    render: (b) => formatRupees(b.valueRupees),
+  },
+];
 
 export function ReportsView({ data }: { data: ReportsData }) {
   const { monthlySpend, itemWise, branchWise } = data;
@@ -114,64 +153,34 @@ export function ReportsView({ data }: { data: ReportsData }) {
               <div className="border-b p-4">
                 <p className="text-sm font-medium">Item-wise Purchase</p>
               </div>
-              {itemWise.length === 0 ? (
-                <p className="text-muted-foreground p-4 text-sm">No purchases in this window.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-muted-foreground border-b text-left text-xs">
-                      <th className="px-4 py-2 font-medium">Item</th>
-                      <th className="px-4 py-2 font-medium">Type</th>
-                      <th className="px-4 py-2 text-right font-medium">Quantity</th>
-                      <th className="px-4 py-2 text-right font-medium">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {itemWise.map((item) => (
-                      <tr key={item.name + item.type} className="border-b last:border-0">
-                        <td className="px-4 py-2">{item.name}</td>
-                        <td className="text-muted-foreground px-4 py-2 capitalize">
-                          {item.type === "raw" ? "Raw Material" : "Flavour"}
-                        </td>
-                        <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
-                          {formatKg(item.qtyG)}
-                        </td>
-                        <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
-                          {formatRupees(item.valueRupees)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <DataTable
+                columns={itemColumns}
+                data={itemWise}
+                getRowKey={(i) => i.name + i.type}
+                embedded
+                emptyState={
+                  <p className="text-muted-foreground p-4 text-sm">
+                    No purchases in this window.
+                  </p>
+                }
+              />
             </div>
 
             <div className="bg-card rounded-lg border">
               <div className="border-b p-4">
                 <p className="text-sm font-medium">Branch-wise Purchase</p>
               </div>
-              {branchWise.length === 0 ? (
-                <p className="text-muted-foreground p-4 text-sm">No purchases in this window.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-muted-foreground border-b text-left text-xs">
-                      <th className="px-4 py-2 font-medium">Branch</th>
-                      <th className="px-4 py-2 text-right font-medium">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {branchWise.map((b) => (
-                      <tr key={b.name} className="border-b last:border-0">
-                        <td className="px-4 py-2">{b.name}</td>
-                        <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
-                          {formatRupees(b.valueRupees)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <DataTable
+                columns={branchColumns}
+                data={branchWise}
+                getRowKey={(b) => b.name}
+                embedded
+                emptyState={
+                  <p className="text-muted-foreground p-4 text-sm">
+                    No purchases in this window.
+                  </p>
+                }
+              />
             </div>
           </div>
         </>

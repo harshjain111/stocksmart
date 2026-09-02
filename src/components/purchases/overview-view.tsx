@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { StatusTag } from "@/components/shared/status-tag";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { cn } from "@/lib/utils";
 
 export type OverviewData = {
@@ -127,8 +128,144 @@ function KpiCard({
   return href ? <Link href={href}>{content}</Link> : content;
 }
 
+type RecentOrder = OverviewData["recentOrders"][number];
+type RecentGrn = OverviewData["recentGrns"][number];
+type TopItem = OverviewData["topPurchasedItems"][number];
+
 export function OverviewView({ data }: { data: OverviewData }) {
   const { kpis, pipeline, attentionItems, recentOrders, recentGrns, topPurchasedItems, purchaseSummary } = data;
+
+  const orderColumns: DataTableColumn<RecentOrder>[] = [
+    {
+      key: "poNo",
+      header: "PO Number",
+      cardRole: "title",
+      render: (o) => (
+        <Link href={`/purchases/orders/${o.id}`} className="text-primary font-medium hover:underline">
+          {o.poNo}
+        </Link>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cardRole: "badge",
+      render: (o) => <StatusTag status={o.status} />,
+    },
+    {
+      key: "items",
+      header: "Items",
+      className: "whitespace-nowrap",
+      render: (o) => `${o.itemCount} items`,
+    },
+    {
+      key: "expected",
+      header: "Expected",
+      className: "whitespace-nowrap",
+      render: (o) => (
+        <>
+          {fmtDate(o.expectedDate)}
+          {o.daysLeft != null && (
+            <span
+              className={cn(
+                "block text-xs",
+                o.daysLeft < 0 ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {o.daysLeft < 0
+                ? `${Math.abs(o.daysLeft)} days overdue`
+                : `${o.daysLeft} days left`}
+            </span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "value",
+      header: "Value",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (o) => formatRupees(o.valueRupees),
+    },
+    {
+      key: "actions",
+      header: "",
+      cardRole: "actions",
+      className: "text-right",
+      render: (o) => (
+        <div className="flex items-center justify-end gap-2">
+          <Link
+            href={`/purchases/orders/${o.id}`}
+            aria-label={`View ${o.poNo}`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Eye className="size-4" />
+          </Link>
+          <Link
+            href={`/purchases/orders/${o.id}/print`}
+            aria-label={`Download ${o.poNo}`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Download className="size-4" />
+          </Link>
+        </div>
+      ),
+    },
+  ];
+
+  const grnColumns: DataTableColumn<RecentGrn>[] = [
+    {
+      key: "grnNo",
+      header: "GRN Number",
+      cardRole: "title",
+      render: (g) => <span className="font-medium">{g.grnNo}</span>,
+    },
+    { key: "poNo", header: "PO Number", className: "whitespace-nowrap", render: (g) => g.poNo },
+    { key: "date", header: "Date", className: "whitespace-nowrap", render: (g) => fmtDate(g.date) },
+    {
+      key: "transport",
+      header: "Transport",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (g) => (g.transportCost != null ? formatRupees(g.transportCost) : "—"),
+    },
+    {
+      key: "value",
+      header: "Value",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (g) => formatRupees(g.valueRupees),
+    },
+  ];
+
+  const topItemColumns: DataTableColumn<TopItem>[] = [
+    {
+      key: "name",
+      header: "Item",
+      cardRole: "title",
+      render: (item) => item.name,
+    },
+    {
+      key: "type",
+      header: "Type",
+      className: "text-muted-foreground capitalize",
+      render: (item) => (item.type === "raw" ? "Raw Material" : "Flavour"),
+    },
+    {
+      key: "qty",
+      header: "Quantity",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (item) => formatKg(item.qtyG),
+    },
+    {
+      key: "value",
+      header: "Value",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (item) => formatRupees(item.valueRupees),
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -282,70 +419,15 @@ export function OverviewView({ data }: { data: OverviewData }) {
               View all <ArrowRight className="size-3" />
             </Link>
           </div>
-          {recentOrders.length === 0 ? (
-            <p className="text-muted-foreground p-4 text-sm">No purchase orders yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground border-b text-left text-xs">
-                    <th className="px-4 py-2 font-medium">PO Number</th>
-                    <th className="px-4 py-2 font-medium">Items</th>
-                    <th className="px-4 py-2 font-medium">Expected</th>
-                    <th className="px-4 py-2 font-medium">Status</th>
-                    <th className="px-4 py-2 text-right font-medium">Value</th>
-                    <th className="px-4 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.map((o) => (
-                    <tr key={o.id} className="border-b last:border-0">
-                      <td className="px-4 py-2">
-                        <Link href={`/purchases/orders/${o.id}`} className="text-primary font-medium hover:underline">
-                          {o.poNo}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap">{o.itemCount} items</td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        {fmtDate(o.expectedDate)}
-                        {o.daysLeft != null && (
-                          <span
-                            className={cn(
-                              "block text-xs",
-                              o.daysLeft < 0 ? "text-destructive" : "text-muted-foreground",
-                            )}
-                          >
-                            {o.daysLeft < 0
-                              ? `${Math.abs(o.daysLeft)} days overdue`
-                              : `${o.daysLeft} days left`}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        <StatusTag status={o.status} />
-                      </td>
-                      <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
-                        {formatRupees(o.valueRupees)}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link href={`/purchases/orders/${o.id}`} className="text-muted-foreground hover:text-foreground">
-                            <Eye className="size-4" />
-                          </Link>
-                          <Link
-                            href={`/purchases/orders/${o.id}/print`}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <Download className="size-4" />
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            columns={orderColumns}
+            data={recentOrders}
+            getRowKey={(o) => o.id}
+            embedded
+            emptyState={
+              <p className="text-muted-foreground p-4 text-sm">No purchase orders yet.</p>
+            }
+          />
         </div>
 
         <div className="bg-card rounded-lg border">
@@ -358,38 +440,15 @@ export function OverviewView({ data }: { data: OverviewData }) {
               View all <ArrowRight className="size-3" />
             </Link>
           </div>
-          {recentGrns.length === 0 ? (
-            <p className="text-muted-foreground p-4 text-sm">No goods received yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground border-b text-left text-xs">
-                    <th className="px-4 py-2 font-medium">GRN Number</th>
-                    <th className="px-4 py-2 font-medium">PO Number</th>
-                    <th className="px-4 py-2 font-medium">Date</th>
-                    <th className="px-4 py-2 text-right font-medium">Transport</th>
-                    <th className="px-4 py-2 text-right font-medium">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentGrns.map((g) => (
-                    <tr key={g.id} className="border-b last:border-0">
-                      <td className="px-4 py-2 font-medium">{g.grnNo}</td>
-                      <td className="px-4 py-2 whitespace-nowrap">{g.poNo}</td>
-                      <td className="px-4 py-2 whitespace-nowrap">{fmtDate(g.date)}</td>
-                      <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
-                        {g.transportCost != null ? formatRupees(g.transportCost) : "—"}
-                      </td>
-                      <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
-                        {formatRupees(g.valueRupees)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            columns={grnColumns}
+            data={recentGrns}
+            getRowKey={(g) => g.id}
+            embedded
+            emptyState={
+              <p className="text-muted-foreground p-4 text-sm">No goods received yet.</p>
+            }
+          />
         </div>
       </div>
 
@@ -420,32 +479,17 @@ export function OverviewView({ data }: { data: OverviewData }) {
               View all <ArrowRight className="size-3" />
             </Link>
           </div>
-          {topPurchasedItems.length === 0 ? (
-            <p className="text-muted-foreground p-4 text-sm">Nothing purchased yet this month.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs">
-                  <th className="px-4 py-2 font-medium">Item</th>
-                  <th className="px-4 py-2 font-medium">Type</th>
-                  <th className="px-4 py-2 text-right font-medium">Quantity</th>
-                  <th className="px-4 py-2 text-right font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topPurchasedItems.map((item) => (
-                  <tr key={item.name + item.type} className="border-b last:border-0">
-                    <td className="px-4 py-2">{item.name}</td>
-                    <td className="text-muted-foreground px-4 py-2 capitalize">
-                      {item.type === "raw" ? "Raw Material" : "Flavour"}
-                    </td>
-                    <td className="font-qty px-4 py-2 text-right whitespace-nowrap">{formatKg(item.qtyG)}</td>
-                    <td className="font-qty px-4 py-2 text-right whitespace-nowrap">{formatRupees(item.valueRupees)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <DataTable
+            columns={topItemColumns}
+            data={topPurchasedItems}
+            getRowKey={(item) => item.name + item.type}
+            embedded
+            emptyState={
+              <p className="text-muted-foreground p-4 text-sm">
+                Nothing purchased yet this month.
+              </p>
+            }
+          />
         </div>
 
         <div className="bg-card rounded-lg border p-4">

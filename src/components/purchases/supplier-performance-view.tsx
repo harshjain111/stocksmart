@@ -16,7 +16,12 @@ export function SupplierPerformanceView({
   onTimeDays: number;
 }) {
   const columns: DataTableColumn<SupplierPerformance>[] = [
-    { key: "supplier", header: "Supplier", render: (s) => s.supplierName },
+    {
+      key: "supplier",
+      header: "Supplier",
+      cardRole: "title",
+      render: (s) => s.supplierName,
+    },
     {
       key: "sent",
       header: "Orders sent",

@@ -113,7 +113,12 @@ export function OrdersView({
   }, []);
 
   const columns: DataTableColumn<OrderRow>[] = [
-    { key: "poNo", header: "Order", render: (r) => r.poNo },
+    {
+      key: "poNo",
+      header: "Order",
+      cardRole: "title",
+      render: (r) => r.poNo,
+    },
     { key: "supplier", header: "Supplier", render: (r) => r.supplierName },
     { key: "shipTo", header: "Ship to", render: (r) => r.shipToName },
     ...(isAdmin
@@ -128,6 +133,7 @@ export function OrdersView({
     {
       key: "status",
       header: "Status",
+      cardRole: "badge",
       render: (r) => <StatusTag status={r.status} />,
     },
     {
@@ -351,6 +357,78 @@ function ComposeOrderDialog({
   const [supplierId, setSupplierId] = React.useState("");
   const [lines, setLines] = React.useState<ComposedLine[]>([]);
   const [pickedItemId, setPickedItemId] = React.useState("");
+  const composedLineColumns: DataTableColumn<ComposedLine>[] = [
+    {
+      key: "item",
+      header: "Item",
+      cardRole: "title",
+      className: "whitespace-nowrap",
+      render: (line) => (
+        <>
+          {line.name}
+          {line.code && (
+            <span className="text-muted-foreground"> · {line.code}</span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "qty",
+      header: "Quantity (kg)",
+      numeric: true,
+      render: (line) => (
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="0.1"
+          min="0"
+          aria-label={`Quantity for ${line.name}`}
+          className="font-qty ml-auto w-24 text-right"
+          value={line.qtyKg}
+          onChange={(e) =>
+            updateLine(line.rawMaterialId, "qtyKg", e.target.value)
+          }
+        />
+      ),
+    },
+    {
+      key: "rate",
+      header: "Rate",
+      numeric: true,
+      render: (line) => (
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          placeholder="Blank"
+          aria-label={`Rate for ${line.name}`}
+          className="ml-auto w-24 text-right"
+          value={line.rate}
+          onChange={(e) =>
+            updateLine(line.rawMaterialId, "rate", e.target.value)
+          }
+        />
+      ),
+    },
+    {
+      key: "remove",
+      header: "",
+      cardRole: "actions",
+      className: "text-right",
+      render: (line) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Remove ${line.name}`}
+          onClick={() => removeLine(line.rawMaterialId)}
+        >
+          <Trash2 className="text-destructive size-4" />
+        </Button>
+      ),
+    },
+  ];
+
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -511,72 +589,11 @@ function ComposeOrderDialog({
           </div>
 
           {lines.length > 0 && (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-muted-foreground px-3 py-2 text-left font-medium">
-                      Item
-                    </th>
-                    <th className="text-muted-foreground px-3 py-2 text-right font-medium">
-                      Quantity (kg)
-                    </th>
-                    <th className="text-muted-foreground px-3 py-2 text-right font-medium">
-                      Rate
-                    </th>
-                    <th className="px-3 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => (
-                    <tr key={line.rawMaterialId} className="border-b last:border-0">
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {line.name}
-                        {line.code && (
-                          <span className="text-muted-foreground"> · {line.code}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.1"
-                          min="0"
-                          className="font-qty ml-auto w-24 text-right"
-                          value={line.qtyKg}
-                          onChange={(e) =>
-                            updateLine(line.rawMaterialId, "qtyKg", e.target.value)
-                          }
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.01"
-                          min="0"
-                          placeholder="Blank"
-                          className="ml-auto w-24 text-right"
-                          value={line.rate}
-                          onChange={(e) =>
-                            updateLine(line.rawMaterialId, "rate", e.target.value)
-                          }
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeLine(line.rawMaterialId)}
-                        >
-                          <Trash2 className="text-destructive size-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={composedLineColumns}
+              data={lines}
+              getRowKey={(line) => line.rawMaterialId}
+            />
           )}
 
           {serverError && (

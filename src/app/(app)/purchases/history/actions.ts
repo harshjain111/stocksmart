@@ -54,6 +54,7 @@ type RatePoint = { rate: number; date: string; source: string };
 
 type MaterialSummary = {
   rawMaterialId: string;
+  itemType: "raw" | "flavour";
   name: string;
   code: string | null;
   orderCount: number;
@@ -90,7 +91,7 @@ export async function getPurchaseHistory(
   let poQuery = admin
     .from("purchase_orders")
     .select(
-      "id, po_no, branch_id, created_at, supplier_id, suppliers(name), po_lines(raw_material_id, qty_g, rate, raw_materials(name, code))",
+      "id, po_no, branch_id, created_at, supplier_id, suppliers(name), po_lines(raw_material_id, flavour_id, qty_g, rate, raw_materials(name, code), flavours(name, code))",
     );
   if (session.role !== "admin") {
     poQuery = poQuery.eq("branch_id", session.branchId ?? "");
@@ -110,17 +111,52 @@ export async function getPurchaseHistory(
     supplier_id: string;
     suppliers: { name: string } | null;
     po_lines: {
-      raw_material_id: string;
+      raw_material_id: string | null;
+      flavour_id: string | null;
       qty_g: number;
       rate: number | null;
       raw_materials: { name: string; code: string | null } | null;
+      flavours: { name: string; code: string | null } | null;
     }[];
   };
   const orderRows = (orders ?? []) as unknown as OrderRow[];
   const poIds = orderRows.map((o) => o.id);
 
+  // po_lines is polymorphic: exactly one of raw_material_id / flavour_id is
+  // set (po_lines_exactly_one_item). Keying the per-item aggregation by
+  // type as well as id is what keeps a flavour from colliding with a raw
+  // material that happens to share a uuid, and what stops ready-made
+  // flavour purchases showing up as "Unknown".
+  type LineItem = {
+    itemType: "raw" | "flavour";
+    itemId: string;
+    name: string;
+    code: string | null;
+  };
+  function lineItem(line: OrderRow["po_lines"][number]): LineItem | null {
+    if (line.raw_material_id) {
+      return {
+        itemType: "raw",
+        itemId: line.raw_material_id,
+        name: line.raw_materials?.name ?? "Unknown",
+        code: line.raw_materials?.code ?? null,
+      };
+    }
+    if (line.flavour_id) {
+      return {
+        itemType: "flavour",
+        itemId: line.flavour_id,
+        name: line.flavours?.name ?? "Unknown",
+        code: line.flavours?.code ?? null,
+      };
+    }
+    return null;
+  }
+  const itemKey = (itemType: string, itemId: string) => `${itemType}|${itemId}`;
+
   let receiptLines: {
     grn_id: string;
+    item_type: "raw" | "flavour";
     item_id: string;
     received_qty_g: number | null;
     damaged_qty_g: number | null;
@@ -138,7 +174,7 @@ export async function getPurchaseHistory(
     const { data, error: receiptsError } = await admin
       .from("grn_lines")
       .select(
-        "grn_id, item_id, received_qty_g, damaged_qty_g, rate, grns!inner(posted_at, status, source, purchase_order_id, purchase_orders(supplier_id, suppliers(name)))",
+        "grn_id, item_type, item_id, received_qty_g, damaged_qty_g, rate, grns!inner(posted_at, status, source, purchase_order_id, purchase_orders(supplier_id, suppliers(name)))",
       )
       .eq("grns.source", "vendor")
       .eq("grns.status", "posted")
@@ -147,16 +183,34 @@ export async function getPurchaseHistory(
     receiptLines = (data ?? []) as unknown as typeof receiptLines;
   }
 
-  const receiptMaterialIds = [...new Set(receiptLines.map((l) => l.item_id))];
-  const { data: receiptMaterials } =
-    receiptMaterialIds.length > 0
-      ? await admin
-          .from("raw_materials")
-          .select("id, name, code")
-          .in("id", receiptMaterialIds)
-      : { data: [] };
-  const receiptMaterialById = new Map(
-    (receiptMaterials ?? []).map((m) => [m.id, m]),
+  const receiptRawIds = [
+    ...new Set(
+      receiptLines.filter((l) => l.item_type === "raw").map((l) => l.item_id),
+    ),
+  ];
+  const receiptFlavourIds = [
+    ...new Set(
+      receiptLines.filter((l) => l.item_type === "flavour").map((l) => l.item_id),
+    ),
+  ];
+  const [{ data: receiptMaterials }, { data: receiptFlavours }] =
+    await Promise.all([
+      receiptRawIds.length > 0
+        ? admin.from("raw_materials").select("id, name, code").in("id", receiptRawIds)
+        : Promise.resolve({ data: [] }),
+      receiptFlavourIds.length > 0
+        ? admin.from("flavours").select("id, name, code").in("id", receiptFlavourIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+  const receiptItemByKey = new Map(
+    [
+      ...(receiptMaterials ?? []).map(
+        (m) => [itemKey("raw", m.id), m] as const,
+      ),
+      ...(receiptFlavours ?? []).map(
+        (f) => [itemKey("flavour", f.id), f] as const,
+      ),
+    ],
   );
 
   if (filters.rawMaterialId) {
@@ -170,7 +224,15 @@ export async function getPurchaseHistory(
   const supplierMap = new Map<string, SupplierSummary>();
   const materialMap = new Map<
     string,
-    { name: string; code: string | null; orderCount: Set<string>; totalOrderedG: number; totalReceivedG: number }
+    {
+      itemType: "raw" | "flavour";
+      itemId: string;
+      name: string;
+      code: string | null;
+      orderCount: Set<string>;
+      totalOrderedG: number;
+      totalReceivedG: number;
+    }
   >();
   const records: HistoryRecord[] = [];
 
@@ -192,23 +254,28 @@ export async function getPurchaseHistory(
     });
 
     for (const line of o.po_lines) {
-      const m = materialMap.get(line.raw_material_id) ?? {
-        name: line.raw_materials?.name ?? "Unknown",
-        code: line.raw_materials?.code ?? null,
+      const item = lineItem(line);
+      if (!item) continue;
+      const key = itemKey(item.itemType, item.itemId);
+      const m = materialMap.get(key) ?? {
+        itemType: item.itemType,
+        itemId: item.itemId,
+        name: item.name,
+        code: item.code,
         orderCount: new Set<string>(),
         totalOrderedG: 0,
         totalReceivedG: 0,
       };
       m.orderCount.add(o.id);
       m.totalOrderedG += line.qty_g;
-      materialMap.set(line.raw_material_id, m);
+      materialMap.set(key, m);
 
       records.push({
         type: "order",
         date: o.created_at,
         supplierName,
-        materialName: line.raw_materials?.name ?? "Unknown",
-        materialCode: line.raw_materials?.code ?? null,
+        materialName: item.name,
+        materialCode: item.code,
         qtyG: line.qty_g,
         rate: line.rate == null ? null : Number(line.rate),
       });
@@ -230,22 +297,28 @@ export async function getPurchaseHistory(
         existing.totalReceivedG += totalG;
       }
     }
-    const m = materialMap.get(l.item_id);
+    const key = itemKey(l.item_type, l.item_id);
+    const m = materialMap.get(key);
     if (m) m.totalReceivedG += totalG;
 
-    const receiptMaterial = receiptMaterialById.get(l.item_id);
+    const receiptItem = receiptItemByKey.get(key);
     records.push({
       type: "receipt",
       date: grn.posted_at ?? "",
       supplierName: po?.suppliers?.name ?? "Unknown supplier",
-      materialName: receiptMaterial?.name ?? "Unknown",
-      materialCode: receiptMaterial?.code ?? null,
+      materialName: receiptItem?.name ?? "Unknown",
+      materialCode: receiptItem?.code ?? null,
       qtyG: totalG,
       rate: l.rate == null ? null : Number(l.rate),
     });
   }
 
-  const materialIds = [...materialMap.keys()];
+  // supplier_rates is keyed on raw_material_id, so rate history exists for
+  // raw materials only. A purchased flavour simply has none — it shows its
+  // PO/GRN rates in the records list instead of a trend line.
+  const materialIds = [...materialMap.values()]
+    .filter((m) => m.itemType === "raw")
+    .map((m) => m.itemId);
   const { data: rateRows } =
     materialIds.length > 0
       ? await admin
@@ -265,11 +338,15 @@ export async function getPurchaseHistory(
   const bySupplier = [...supplierMap.values()].sort(
     (a, b) => b.totalOrderedG - a.totalOrderedG,
   );
-  const byMaterial: MaterialSummary[] = [...materialMap.entries()]
-    .map(([id, m]) => {
-      const history = rateHistoryByMaterial.get(id) ?? [];
+  const byMaterial: MaterialSummary[] = [...materialMap.values()]
+    .map((m) => {
+      const history =
+        m.itemType === "raw"
+          ? (rateHistoryByMaterial.get(m.itemId) ?? [])
+          : [];
       return {
-        rawMaterialId: id,
+        rawMaterialId: m.itemId,
+        itemType: m.itemType,
         name: m.name,
         code: m.code,
         orderCount: m.orderCount.size,
