@@ -32,7 +32,7 @@ export default async function SetupMaterialsPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("flavours")
-      .select("id, code, name, current_version_id, is_active")
+      .select("id, code, name, current_version_id, default_supplier_id, is_active")
       .order("code"),
   ]);
 

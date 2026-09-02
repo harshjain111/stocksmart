@@ -10,7 +10,9 @@
 // another branch's stock — every net-off below happens strictly within
 // a single department's own numbers):
 //   1. Flavour demand nets off that department's own mixed-flavour
-//      stock first.
+//      stock first. A line flagged directPurchase skips the explosion
+//      entirely and stays a flavour buy line — that's a manual "buy this
+//      flavour ready-made" entry, not something we mix ourselves.
 //   2. Whatever flavour demand remains explodes into raw material need
 //      through the flavour's *current* recipe version, applying that
 //      version's wastage — same formula createDraftBatch() already
@@ -30,6 +32,12 @@ export type DemandLine = {
   itemId: string;
   qtyG: number;
   departmentId: string;
+  /**
+   * Flavour lines only. When set, the flavour is bought ready-made from
+   * its own supplier instead of being exploded through its recipe.
+   * Requisition/par-driven demand never sets this — only manual entry.
+   */
+  directPurchase?: boolean;
 };
 
 export type StockBalance = {
@@ -41,7 +49,8 @@ export type StockBalance = {
 
 export type OpenPoLine = {
   departmentId: string;
-  rawMaterialId: string;
+  itemType: ItemType;
+  itemId: string;
   qtyG: number;
 };
 
@@ -61,16 +70,24 @@ export type DefaultSupplier = {
   supplierId: string;
 };
 
+export type FlavourSupplier = {
+  flavourId: string;
+  supplierId: string;
+};
+
 export type BuyEngineInput = {
   demand: DemandLine[];
   stockBalances: StockBalance[];
   openPoLines: OpenPoLine[];
   currentRecipeVersions: CurrentRecipeVersion[];
   defaultSuppliers: DefaultSupplier[];
+  /** Supplier mapping for flavours bought ready-made. */
+  flavourSuppliers?: FlavourSupplier[];
 };
 
 export type BuyLine = {
-  rawMaterialId: string;
+  itemType: ItemType;
+  itemId: string;
   neededG: number;
   haveG: number;
   onOrderG: number;
@@ -101,6 +118,7 @@ export function computeBuyPlan(input: BuyEngineInput): BuyEngineResult {
     openPoLines,
     currentRecipeVersions,
     defaultSuppliers,
+    flavourSuppliers = [],
   } = input;
 
   const issues: string[] = [];
@@ -111,6 +129,9 @@ export function computeBuyPlan(input: BuyEngineInput): BuyEngineResult {
   const supplierByRawMaterialId = new Map(
     defaultSuppliers.map((s) => [s.rawMaterialId, s.supplierId]),
   );
+  const supplierByFlavourId = new Map(
+    flavourSuppliers.map((s) => [s.flavourId, s.supplierId]),
+  );
 
   const stockByDeptAndKey = new Map<string, number>();
   for (const b of stockBalances) {
@@ -119,10 +140,10 @@ export function computeBuyPlan(input: BuyEngineInput): BuyEngineResult {
       b.qtyG,
     );
   }
-  const openPoByDeptAndRaw = new Map<string, number>();
+  const openPoByDeptAndItem = new Map<string, number>();
   for (const p of openPoLines) {
-    const k = `${p.departmentId}|${p.rawMaterialId}`;
-    openPoByDeptAndRaw.set(k, (openPoByDeptAndRaw.get(k) ?? 0) + p.qtyG);
+    const k = `${p.departmentId}|${key(p.itemType, p.itemId)}`;
+    openPoByDeptAndItem.set(k, (openPoByDeptAndItem.get(k) ?? 0) + p.qtyG);
   }
 
   const demandByDept = new Map<string, DemandLine[]>();
@@ -132,16 +153,37 @@ export function computeBuyPlan(input: BuyEngineInput): BuyEngineResult {
     demandByDept.set(line.departmentId, list);
   }
 
-  // (supplierId ?? "__unassigned__", departmentId) -> rawMaterialId -> BuyLine
+  // (supplierId ?? "__unassigned__", departmentId) -> itemKey -> BuyLine
   const groupMap = new Map<string, Map<string, BuyLine>>();
+
+  const addLine = (
+    supplierId: string | null,
+    departmentId: string,
+    line: BuyLine,
+  ) => {
+    const groupKey = `${supplierId ?? "__unassigned__"}|${departmentId}`;
+    const lineMap = groupMap.get(groupKey) ?? new Map<string, BuyLine>();
+    lineMap.set(key(line.itemType, line.itemId), line);
+    groupMap.set(groupKey, lineMap);
+  };
 
   for (const [departmentId, lines] of demandByDept) {
     // Raw material need for this department only, before netting.
     const rawNeed = new Map<string, number>();
+    // Flavours being bought ready-made rather than mixed in-house.
+    const flavourNeed = new Map<string, number>();
 
     for (const line of lines) {
       if (line.itemType === "raw") {
         rawNeed.set(line.itemId, (rawNeed.get(line.itemId) ?? 0) + line.qtyG);
+        continue;
+      }
+
+      if (line.directPurchase) {
+        flavourNeed.set(
+          line.itemId,
+          (flavourNeed.get(line.itemId) ?? 0) + line.qtyG,
+        );
         continue;
       }
 
@@ -177,7 +219,10 @@ export function computeBuyPlan(input: BuyEngineInput): BuyEngineResult {
       const haveG =
         stockByDeptAndKey.get(`${departmentId}|${key("raw", rawMaterialId)}`) ??
         0;
-      const onOrderG = openPoByDeptAndRaw.get(`${departmentId}|${rawMaterialId}`) ?? 0;
+      const onOrderG =
+        openPoByDeptAndItem.get(
+          `${departmentId}|${key("raw", rawMaterialId)}`,
+        ) ?? 0;
       const buyG = Math.max(0, neededG - haveG - onOrderG);
       if (buyG === 0) continue;
 
@@ -188,16 +233,45 @@ export function computeBuyPlan(input: BuyEngineInput): BuyEngineResult {
         );
       }
 
-      const groupKey = `${supplierId ?? "__unassigned__"}|${departmentId}`;
-      const lineMap = groupMap.get(groupKey) ?? new Map<string, BuyLine>();
-      lineMap.set(rawMaterialId, {
-        rawMaterialId,
+      addLine(supplierId, departmentId, {
+        itemType: "raw",
+        itemId: rawMaterialId,
         neededG,
         haveG,
         onOrderG,
         buyG,
       });
-      groupMap.set(groupKey, lineMap);
+    }
+
+    // Ready-made flavour purchases net off this department's flavour stock
+    // and open flavour PO quantity — same netting rules as raw, just never
+    // exploded through a recipe.
+    for (const [flavourId, neededG] of flavourNeed) {
+      const haveG =
+        stockByDeptAndKey.get(`${departmentId}|${key("flavour", flavourId)}`) ??
+        0;
+      const onOrderG =
+        openPoByDeptAndItem.get(
+          `${departmentId}|${key("flavour", flavourId)}`,
+        ) ?? 0;
+      const buyG = Math.max(0, neededG - haveG - onOrderG);
+      if (buyG === 0) continue;
+
+      const supplierId = supplierByFlavourId.get(flavourId) ?? null;
+      if (!supplierId) {
+        issues.push(
+          `Flavour ${flavourId} has no default supplier — ${buyG}g of shortfall at department ${departmentId} needs a supplier picked manually.`,
+        );
+      }
+
+      addLine(supplierId, departmentId, {
+        itemType: "flavour",
+        itemId: flavourId,
+        neededG,
+        haveG,
+        onOrderG,
+        buyG,
+      });
     }
   }
 

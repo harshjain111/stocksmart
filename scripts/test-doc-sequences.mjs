@@ -48,10 +48,18 @@ async function nextDocNo(docType, branchId) {
   return data;
 }
 
-function isSequential(numbers, prefix) {
+function serial(docNo) {
+  return Number(docNo.split("-")[1]);
+}
+
+// An unbroken run of `numbers` starting at `from`. Deliberately relative
+// to wherever the series already stood: these sequences are shared with
+// every other test and with real documents, so anchoring on 0001 only
+// held the very first time this script was ever run.
+function isRunFrom(numbers, prefix, from) {
   const sorted = [...numbers].sort();
   for (let i = 0; i < sorted.length; i++) {
-    const expected = `${prefix}-${String(i + 1).padStart(4, "0")}`;
+    const expected = `${prefix}-${String(from + i).padStart(4, "0")}`;
     if (sorted[i] !== expected) return false;
   }
   return true;
@@ -69,6 +77,13 @@ async function main() {
     .eq("name", "Kolkata")
     .single();
 
+  // Where each series stands right now. Independence is then proved by
+  // showing a series resumes from its own mark and not from a
+  // neighbour's, which holds no matter what has already been issued.
+  const reqMark = serial(await nextDocNo("REQ", guwahati.id));
+  const trfMark = serial(await nextDocNo("TRF", guwahati.id));
+  const kolkataMark = serial(await nextDocNo("REQ", kolkata.id));
+
   console.log(`Firing ${CONCURRENCY} concurrent REQ calls for Guwahati...`);
   const reqResults = await Promise.all(
     Array.from({ length: CONCURRENCY }, () => nextDocNo("REQ", guwahati.id)),
@@ -78,8 +93,8 @@ async function main() {
     new Set(reqResults).size === CONCURRENCY,
   );
   assertTrue(
-    "REQ numbers form an unbroken 0001..0100 sequence",
-    isSequential(reqResults, "REQ"),
+    `REQ numbers form an unbroken run of ${CONCURRENCY} with no gaps`,
+    isRunFrom(reqResults, "REQ", reqMark + 1),
   );
 
   console.log(
@@ -89,8 +104,8 @@ async function main() {
     Array.from({ length: CONCURRENCY }, () => nextDocNo("TRF", guwahati.id)),
   );
   assertTrue(
-    "TRF series is independent of REQ series (starts at 0001)",
-    trfResults.includes("TRF-0001"),
+    "TRF series is independent of REQ series (resumes from its own mark, unmoved by 100 REQ calls)",
+    isRunFrom(trfResults, "TRF", trfMark + 1),
   );
   assertTrue(
     `all ${CONCURRENCY} TRF numbers unique`,
@@ -104,8 +119,8 @@ async function main() {
     Array.from({ length: CONCURRENCY }, () => nextDocNo("REQ", kolkata.id)),
   );
   assertTrue(
-    "Kolkata's REQ series is independent of Guwahati's (starts at 0001)",
-    kolkataResults.includes("REQ-0001"),
+    "Kolkata's REQ series is independent of Guwahati's (resumes from its own mark)",
+    isRunFrom(kolkataResults, "REQ", kolkataMark + 1),
   );
   assertTrue(
     `all ${CONCURRENCY} Kolkata REQ numbers unique`,

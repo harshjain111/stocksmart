@@ -26,6 +26,7 @@ type Flavour = {
   code: string | null;
   name: string;
   current_version_id: string | null;
+  default_supplier_id: string | null;
   is_active: boolean;
 };
 
@@ -67,7 +68,7 @@ export function MaterialsFlavoursTabs({
           rates={rates}
         />
       ) : (
-        <FlavoursView flavours={flavours} />
+        <FlavoursView flavours={flavours} suppliers={suppliers} />
       )}
     </div>
   );

@@ -18,9 +18,10 @@ async function requireBuyAccess() {
 
 type PoLine = {
   id: string;
-  rawMaterialId: string;
-  rawMaterialName: string;
-  rawMaterialCode: string | null;
+  itemType: "raw" | "flavour";
+  itemId: string;
+  itemName: string;
+  itemCode: string | null;
   qtyG: number;
   rate: number | null;
 };
@@ -74,7 +75,9 @@ async function loadDetail(poId: string): Promise<PoDetail | null> {
   const [{ data: lines }, { data: grns }] = await Promise.all([
     admin
       .from("po_lines")
-      .select("id, raw_material_id, qty_g, rate, raw_materials(name, code)")
+      .select(
+        "id, raw_material_id, flavour_id, qty_g, rate, raw_materials(name, code), flavours(name, code)",
+      )
       .eq("purchase_order_id", poId)
       .order("created_at", { ascending: true }),
     admin
@@ -147,18 +150,21 @@ async function loadDetail(poId: string): Promise<PoDetail | null> {
       departmentName: shipToDept?.name ?? "Unknown department",
       branchName: shipToDept?.branches?.name ?? "",
     },
-    lines: (lines ?? []).map((l) => ({
-      id: l.id,
-      rawMaterialId: l.raw_material_id,
-      rawMaterialName:
-        (l.raw_materials as unknown as { name: string; code: string | null })
-          ?.name ?? "Unknown",
-      rawMaterialCode:
-        (l.raw_materials as unknown as { name: string; code: string | null })
-          ?.code ?? null,
-      qtyG: l.qty_g,
-      rate: l.rate == null ? null : Number(l.rate),
-    })),
+    lines: (lines ?? []).map((l) => {
+      const isRaw = !!l.raw_material_id;
+      const item = (isRaw ? l.raw_materials : l.flavours) as unknown as
+        | { name: string; code: string | null }
+        | null;
+      return {
+        id: l.id,
+        itemType: (isRaw ? "raw" : "flavour") as "raw" | "flavour",
+        itemId: (l.raw_material_id ?? l.flavour_id) as string,
+        itemName: item?.name ?? "Unknown",
+        itemCode: item?.code ?? null,
+        qtyG: l.qty_g,
+        rate: l.rate == null ? null : Number(l.rate),
+      };
+    }),
     receiving: {
       orderedG,
       receivedG,

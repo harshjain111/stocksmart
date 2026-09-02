@@ -31,7 +31,9 @@ export default async function PoPrintPage({
 
   const { data: lines } = await admin
     .from("po_lines")
-    .select("qty_g, rate, raw_materials(name, code)")
+    .select(
+      "qty_g, rate, raw_material_id, raw_materials(name, code), flavours(name, code)",
+    )
     .eq("purchase_order_id", poId)
     .order("created_at", { ascending: true });
 
@@ -100,7 +102,9 @@ export default async function PoPrintPage({
           </thead>
           <tbody>
             {(lines ?? []).map((line, i) => {
-              const material = line.raw_materials as unknown as {
+              const material = (line.raw_material_id
+                ? line.raw_materials
+                : line.flavours) as unknown as {
                 name: string;
                 code: string | null;
               } | null;

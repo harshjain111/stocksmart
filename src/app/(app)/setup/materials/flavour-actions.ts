@@ -40,6 +40,7 @@ export async function createFlavour(
     .from("flavours")
     .insert({
       name: parsed.data.name,
+      default_supplier_id: parsed.data.defaultSupplierId ?? null,
       created_by: session.userId,
     })
     .select("id")
@@ -51,6 +52,7 @@ export async function createFlavour(
 
   revalidatePath("/setup/materials");
   revalidatePath("/recipes");
+  revalidatePath("/purchases/create");
   return { success: true, data: { id: flavour.id } };
 }
 
@@ -68,11 +70,15 @@ export async function updateFlavour(
   const supabase = await createClient();
   const { error } = await supabase
     .from("flavours")
-    .update({ name: parsed.data.name })
+    .update({
+      name: parsed.data.name,
+      default_supplier_id: parsed.data.defaultSupplierId ?? null,
+    })
     .eq("id", parsed.data.id);
 
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/setup/materials");
+  revalidatePath("/purchases/create");
   return { success: true };
 }

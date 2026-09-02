@@ -100,7 +100,8 @@ export function CreatePoView({
         supplierId,
         departmentId: group.departmentId,
         lines: group.lines.map((l) => ({
-          rawMaterialId: l.rawMaterialId,
+          itemType: l.itemType,
+          itemId: l.itemId,
           qtyG: l.buyG,
         })),
       },
@@ -139,7 +140,8 @@ export function CreatePoView({
         supplierId: (group.supplierId ?? pickedSupplier[group.key])!,
         departmentId: group.departmentId,
         lines: group.lines.map((l) => ({
-          rawMaterialId: l.rawMaterialId,
+          itemType: l.itemType,
+          itemId: l.itemId,
           qtyG: l.buyG,
         })),
       })),
@@ -392,12 +394,15 @@ function BuyGroupCard({
           columns={[
             {
               key: "material",
-              header: "Material",
+              header: "Item",
               render: (l) => (
                 <>
-                  {l.rawMaterialName}
-                  {l.rawMaterialCode && (
-                    <span className="text-muted-foreground"> · {l.rawMaterialCode}</span>
+                  {l.itemName}
+                  {l.itemCode && (
+                    <span className="text-muted-foreground"> · {l.itemCode}</span>
+                  )}
+                  {l.itemType === "flavour" && (
+                    <span className="text-info ml-1.5 text-xs">Flavour</span>
                   )}
                 </>
               ),
@@ -428,7 +433,7 @@ function BuyGroupCard({
             },
           ]}
           data={group.lines}
-          getRowKey={(l) => l.rawMaterialId}
+          getRowKey={(l) => `${l.itemType}|${l.itemId}`}
         />
       </CardContent>
     </Card>

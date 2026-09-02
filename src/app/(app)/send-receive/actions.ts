@@ -285,6 +285,7 @@ type TransferDetail = {
   toDepartmentName: string;
   requisitionReqNo: string | null;
   courier: string | null;
+  transportationCost: number | null;
   docketNo: string | null;
   lines: TransferLine[];
 };
@@ -302,7 +303,7 @@ export async function getTransferDetail(
   const { data: transfer } = await admin
     .from("transfers")
     .select(
-      "id, transfer_no, status, branch_id, courier, docket_no, from_department:from_department_id(id, name), to_department:to_department_id(name), requisitions(req_no)",
+      "id, transfer_no, status, branch_id, courier, docket_no, transportation_cost, from_department:from_department_id(id, name), to_department:to_department_id(name), requisitions(req_no)",
     )
     .eq("id", parsed.data)
     .single();
@@ -371,6 +372,10 @@ export async function getTransferDetail(
       requisitionReqNo: requisition?.req_no ?? null,
       courier: transfer.courier,
       docketNo: transfer.docket_no,
+      transportationCost:
+        transfer.transportation_cost == null
+          ? null
+          : Number(transfer.transportation_cost),
       lines: (lines ?? []).map((l) => ({
         id: l.id,
         itemType: l.item_type,
@@ -400,6 +405,36 @@ export async function updateTransferLineQty(
   const { error } = await supabase
     .from("transfer_lines")
     .update({ qty_g: parsedQty.data })
+    .eq("id", parsedId.data);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/send-receive");
+  return { success: true, data: null };
+}
+
+// Freight for this leg of the journey. Captured while the transfer is
+// still draft (that's all the RLS update policy allows, and it's when the
+// courier is booked anyway). Supplier -> godown freight lives on the
+// vendor GRN; this is every onward leg, so landed cost can accumulate
+// across the whole chain instead of treating a transfer as a new purchase.
+export async function setTransferTransportationCost(
+  transferId: string,
+  cost: number | null,
+): Promise<ActionResult<null>> {
+  const session = await requireSendOutAccess();
+  if (!session) return { success: false, error: "Access required." };
+
+  const parsedId = z.uuid().safeParse(transferId);
+  if (!parsedId.success) return { success: false, error: "Invalid transfer." };
+  const parsedCost = z.coerce.number().nonnegative().nullable().safeParse(cost);
+  if (!parsedCost.success) {
+    return { success: false, error: "Transportation cost can't be negative." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transfers")
+    .update({ transportation_cost: parsedCost.data })
     .eq("id", parsedId.data);
   if (error) return { success: false, error: error.message };
 

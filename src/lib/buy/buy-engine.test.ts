@@ -32,7 +32,14 @@ test("plain raw demand with no stock or open PO buys the full amount", () => {
   assert.equal(result.groups[0].supplierId, SUPPLIER_A);
   assert.equal(result.groups[0].departmentId, GODOWN);
   assert.deepEqual(result.groups[0].lines, [
-    { rawMaterialId: RAW_1, neededG: 5000, haveG: 0, onOrderG: 0, buyG: 5000 },
+    {
+      itemType: "raw",
+      itemId: RAW_1,
+      neededG: 5000,
+      haveG: 0,
+      onOrderG: 0,
+      buyG: 5000,
+    },
   ]);
   assert.equal(result.issues.length, 0);
 });
@@ -61,7 +68,12 @@ test("raw demand nets off both stock and already-open PO quantity", () => {
         { departmentId: GODOWN, itemType: "raw", itemId: RAW_1, qtyG: 2000 },
       ],
       openPoLines: [
-        { departmentId: GODOWN, rawMaterialId: RAW_1, qtyG: 1500 },
+        {
+          departmentId: GODOWN,
+          itemType: "raw",
+          itemId: RAW_1,
+          qtyG: 1500,
+        },
       ],
     }),
   );
@@ -78,7 +90,12 @@ test("stock and open PO covering demand fully produces no shortfall line at all"
         { departmentId: GODOWN, itemType: "raw", itemId: RAW_1, qtyG: 3000 },
       ],
       openPoLines: [
-        { departmentId: GODOWN, rawMaterialId: RAW_1, qtyG: 2000 },
+        {
+          departmentId: GODOWN,
+          itemType: "raw",
+          itemId: RAW_1,
+          qtyG: 2000,
+        },
       ],
     }),
   );
@@ -138,10 +155,10 @@ test("flavour demand explodes the remainder through the current recipe version w
   // RAW_2: round(800 * 0.40 * 1.10) = round(352) = 352
   assert.equal(result.groups.length, 1);
   const lines = result.groups[0].lines.sort((a, b) =>
-    a.rawMaterialId.localeCompare(b.rawMaterialId),
+    a.itemId.localeCompare(b.itemId),
   );
   assert.deepEqual(
-    lines.map((l) => [l.rawMaterialId, l.buyG]),
+    lines.map((l) => [l.itemId, l.buyG]),
     [
       [RAW_1, 528],
       [RAW_2, 352],
@@ -243,4 +260,155 @@ test("direct raw demand and raw demand exploded from a flavour combine for the s
   );
   assert.equal(result.groups.length, 1);
   assert.equal(result.groups[0].lines[0].buyG, 2000);
+});
+
+const FLAVOUR_2 = "flavour-2";
+const SUPPLIER_B = "supplier-b";
+
+test("a flavour flagged directPurchase is bought whole, never exploded", () => {
+  const result = computeBuyPlan(
+    baseInput({
+      demand: [
+        {
+          itemType: "flavour",
+          itemId: FLAVOUR_1,
+          qtyG: 4000,
+          departmentId: GODOWN,
+          directPurchase: true,
+        },
+      ],
+      // A recipe exists, but a direct purchase must ignore it entirely.
+      currentRecipeVersions: [
+        {
+          flavourId: FLAVOUR_1,
+          wastagePct: 2,
+          lines: [{ rawMaterialId: RAW_1, percentage: 100 }],
+        },
+      ],
+      flavourSuppliers: [{ flavourId: FLAVOUR_1, supplierId: SUPPLIER_B }],
+    }),
+  );
+
+  assert.equal(result.groups.length, 1);
+  assert.equal(result.groups[0].supplierId, SUPPLIER_B);
+  assert.deepEqual(result.groups[0].lines, [
+    {
+      itemType: "flavour",
+      itemId: FLAVOUR_1,
+      neededG: 4000,
+      haveG: 0,
+      onOrderG: 0,
+      buyG: 4000,
+    },
+  ]);
+  assert.equal(result.issues.length, 0);
+});
+
+test("a direct flavour purchase nets off flavour stock and open flavour POs", () => {
+  const result = computeBuyPlan(
+    baseInput({
+      demand: [
+        {
+          itemType: "flavour",
+          itemId: FLAVOUR_1,
+          qtyG: 10000,
+          departmentId: GODOWN,
+          directPurchase: true,
+        },
+      ],
+      stockBalances: [
+        {
+          departmentId: GODOWN,
+          itemType: "flavour",
+          itemId: FLAVOUR_1,
+          qtyG: 3000,
+        },
+      ],
+      openPoLines: [
+        {
+          departmentId: GODOWN,
+          itemType: "flavour",
+          itemId: FLAVOUR_1,
+          qtyG: 2000,
+        },
+      ],
+      flavourSuppliers: [{ flavourId: FLAVOUR_1, supplierId: SUPPLIER_B }],
+    }),
+  );
+
+  assert.deepEqual(result.groups[0].lines, [
+    {
+      itemType: "flavour",
+      itemId: FLAVOUR_1,
+      neededG: 10000,
+      haveG: 3000,
+      onOrderG: 2000,
+      buyG: 5000,
+    },
+  ]);
+});
+
+test("a directly-purchased flavour with no supplier is flagged, not silently grouped", () => {
+  const result = computeBuyPlan(
+    baseInput({
+      demand: [
+        {
+          itemType: "flavour",
+          itemId: FLAVOUR_2,
+          qtyG: 1000,
+          departmentId: GODOWN,
+          directPurchase: true,
+        },
+      ],
+    }),
+  );
+
+  assert.equal(result.groups.length, 1);
+  assert.equal(result.groups[0].supplierId, null);
+  assert.equal(result.issues.length, 1);
+  assert.match(result.issues[0], /no default supplier/);
+});
+
+test("direct flavour purchase and exploded flavour demand coexist in one department", () => {
+  const result = computeBuyPlan(
+    baseInput({
+      demand: [
+        // Mixed in-house: explodes to RAW_1.
+        {
+          itemType: "flavour",
+          itemId: FLAVOUR_1,
+          qtyG: 1000,
+          departmentId: GODOWN,
+        },
+        // Bought ready-made: stays a flavour line.
+        {
+          itemType: "flavour",
+          itemId: FLAVOUR_2,
+          qtyG: 2000,
+          departmentId: GODOWN,
+          directPurchase: true,
+        },
+      ],
+      currentRecipeVersions: [
+        {
+          flavourId: FLAVOUR_1,
+          wastagePct: 0,
+          lines: [{ rawMaterialId: RAW_1, percentage: 100 }],
+        },
+      ],
+      flavourSuppliers: [{ flavourId: FLAVOUR_2, supplierId: SUPPLIER_B }],
+    }),
+  );
+
+  const rawGroup = result.groups.find((g) => g.supplierId === SUPPLIER_A);
+  const flavourGroup = result.groups.find((g) => g.supplierId === SUPPLIER_B);
+
+  assert.deepEqual(
+    rawGroup?.lines.map((l) => [l.itemType, l.itemId, l.buyG]),
+    [["raw", RAW_1, 1000]],
+  );
+  assert.deepEqual(
+    flavourGroup?.lines.map((l) => [l.itemType, l.itemId, l.buyG]),
+    [["flavour", FLAVOUR_2, 2000]],
+  );
 });

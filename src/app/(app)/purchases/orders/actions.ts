@@ -216,7 +216,12 @@ export async function createManualOrder(
     {
       supplierId: parsed.data.supplierId,
       departmentId: godown.id,
-      lines: parsed.data.lines,
+      lines: parsed.data.lines.map((l) => ({
+        itemType: "raw" as const,
+        itemId: l.rawMaterialId,
+        qtyG: l.qtyG,
+        rate: l.rate,
+      })),
     },
   ]);
   if (!result.success) return result;

@@ -15,6 +15,7 @@
     "test:masked-batch-card": "node scripts/test-masked-batch-card.mjs",
     "test:confirm-batch": "node scripts/test-confirm-batch.mjs",
     "test:buy-engine": "node --test src/lib/buy/buy-engine.test.ts",
+    "test:purchases-flow": "node scripts/test-purchases-flow.mjs",
     "reconcile:stock-balances": "node scripts/reconcile-stock-balances.mjs"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "@tanstack/react-query": "^5.101.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.27.0",
     "next": "15.5.22",
     "react": "19.1.0",

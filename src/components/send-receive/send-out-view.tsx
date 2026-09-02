@@ -9,6 +9,7 @@ import {
   getTransferDetail,
   updateTransferLineQty,
   dispatchTransfer,
+  setTransferTransportationCost,
 } from "@/app/(app)/send-receive/actions";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -432,6 +433,7 @@ type TransferDetail = {
   requisitionReqNo: string | null;
   courier: string | null;
   docketNo: string | null;
+  transportationCost: number | null;
   lines: {
     id: string;
     itemType: "raw" | "flavour";
@@ -458,6 +460,7 @@ function TransferDetailPanel({
   );
   const [courier, setCourier] = React.useState("");
   const [docketNo, setDocketNo] = React.useState("");
+  const [transportCost, setTransportCost] = React.useState("");
   const [isDispatching, setIsDispatching] = React.useState(false);
   const [serverError, setServerError] = React.useState<string | null>(null);
 
@@ -478,6 +481,11 @@ function TransferDetailPanel({
     );
     setCourier(result.data.courier ?? "");
     setDocketNo(result.data.docketNo ?? "");
+    setTransportCost(
+      result.data.transportationCost != null
+        ? String(result.data.transportationCost)
+        : "",
+    );
   }, [transferId]);
 
   React.useEffect(() => {
@@ -505,10 +513,21 @@ function TransferDetailPanel({
     }
   }
 
+  async function handleTransportCostBlur() {
+    if (!detail) return;
+    const value = transportCost.trim();
+    const result = await setTransferTransportationCost(
+      detail.id,
+      value === "" ? null : parseFloat(value),
+    );
+    if (!result.success) setServerError(result.error);
+  }
+
   async function handleDispatch() {
     if (!detail) return;
     setServerError(null);
     setIsDispatching(true);
+    await handleTransportCostBlur();
     const result = await dispatchTransfer({
       transferId: detail.id,
       courier: courier.trim() || null,
@@ -658,6 +677,31 @@ function TransferDetailPanel({
                   value={docketNo}
                   onChange={(e) => setDocketNo(e.target.value)}
                 />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="transport-cost">
+                  Transportation cost (optional)
+                </Label>
+                <div className="relative w-40">
+                  <span className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs">
+                    ₹
+                  </span>
+                  <Input
+                    id="transport-cost"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    className="font-qty pl-5"
+                    value={transportCost}
+                    onChange={(e) => setTransportCost(e.target.value)}
+                    onBlur={handleTransportCostBlur}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Freight for this leg — adds to the landed cost of the goods
+                  being moved, it isn&apos;t a new purchase.
+                </p>
               </div>
             </div>
           )}

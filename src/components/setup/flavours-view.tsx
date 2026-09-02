@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Pencil, Droplet, AlertTriangle } from "lucide-react";
 import {
@@ -31,16 +31,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Flavour = {
   id: string;
   code: string | null;
   name: string;
   current_version_id: string | null;
+  default_supplier_id: string | null;
   is_active: boolean;
 };
+type Supplier = { id: string; name: string };
 
-export function FlavoursView({ flavours }: { flavours: Flavour[] }) {
+export function FlavoursView({
+  flavours,
+  suppliers,
+}: {
+  flavours: Flavour[];
+  suppliers: Supplier[];
+}) {
   const [dialogTarget, setDialogTarget] = React.useState<
     Flavour | "new" | null
   >(null);
@@ -48,6 +63,7 @@ export function FlavoursView({ flavours }: { flavours: Flavour[] }) {
   const noRecipeCount = flavours.filter(
     (f) => f.is_active && !f.current_version_id,
   ).length;
+  const supplierNameById = new Map(suppliers.map((s) => [s.id, s.name]));
 
   const columns: DataTableColumn<Flavour>[] = [
     { key: "code", header: "Code", render: (f) => f.code ?? "—" },
@@ -68,6 +84,16 @@ export function FlavoursView({ flavours }: { flavours: Flavour[] }) {
           <StatusTag status="current" label="Has a version" />
         ) : (
           <span className="text-muted-foreground">No recipe yet</span>
+        ),
+    },
+    {
+      key: "supplier",
+      header: "Default supplier",
+      render: (f) =>
+        f.default_supplier_id ? (
+          (supplierNameById.get(f.default_supplier_id) ?? "Unknown supplier")
+        ) : (
+          <span className="text-muted-foreground">Not assigned</span>
         ),
     },
     {
@@ -145,6 +171,7 @@ export function FlavoursView({ flavours }: { flavours: Flavour[] }) {
           open={!!dialogTarget}
           onOpenChange={(open) => !open && setDialogTarget(null)}
           flavour={dialogTarget === "new" ? null : dialogTarget}
+          suppliers={suppliers}
         />
       )}
     </div>
@@ -155,20 +182,26 @@ function FlavourDialog({
   open,
   onOpenChange,
   flavour,
+  suppliers,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   flavour: Flavour | null;
+  suppliers: Supplier[];
 }) {
   const isEdit = !!flavour;
   const {
     register,
     handleSubmit,
+    control,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<CreateFlavourInput>({
     resolver: zodResolver(createFlavourSchema),
-    defaultValues: { name: flavour?.name ?? "" },
+    defaultValues: {
+      name: flavour?.name ?? "",
+      defaultSupplierId: flavour?.default_supplier_id ?? null,
+    },
   });
   const [serverError, setServerError] = React.useState<string | null>(null);
 
@@ -211,6 +244,39 @@ function FlavourDialog({
             {errors.name && (
               <p className="text-destructive text-sm">{errors.name.message}</p>
             )}
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Default supplier</Label>
+            <Controller
+              control={control}
+              name="defaultSupplierId"
+              render={({ field }) => (
+                <Select
+                  items={[
+                    { value: "none", label: "None" },
+                    ...suppliers.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                  value={field.value ?? "none"}
+                  onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Used when this flavour is bought ready-made — Purchases groups
+              it under this supplier.
+            </p>
           </div>
           {serverError && (
             <p className="text-destructive text-sm">{serverError}</p>

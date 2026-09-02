@@ -3,7 +3,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { BarChart3 } from "lucide-react";
 
 export type ReportsData = {
-  monthlySpend: { label: string; spendRupees: number; transportRupees: number }[];
+  monthlySpend: {
+    label: string;
+    spendRupees: number;
+    transportRupees: number;
+    onwardFreightRupees: number;
+  }[];
   itemWise: { name: string; type: "raw" | "flavour"; qtyG: number; valueRupees: number }[];
   branchWise: { name: string; valueRupees: number }[];
 };
@@ -20,8 +25,18 @@ function formatKg(grams: number): string {
 
 export function ReportsView({ data }: { data: ReportsData }) {
   const { monthlySpend, itemWise, branchWise } = data;
-  const hasAnyData = monthlySpend.some((m) => m.spendRupees > 0);
+  const hasAnyData = monthlySpend.some(
+    (m) => m.spendRupees > 0 || m.transportRupees > 0 || m.onwardFreightRupees > 0,
+  );
   const maxSpend = Math.max(...monthlySpend.map((m) => m.spendRupees), 1);
+
+  const totalGoods = monthlySpend.reduce((s, m) => s + m.spendRupees, 0);
+  const totalInbound = monthlySpend.reduce((s, m) => s + m.transportRupees, 0);
+  const totalOnward = monthlySpend.reduce(
+    (s, m) => s + m.onwardFreightRupees,
+    0,
+  );
+  const totalLanded = totalGoods + totalInbound + totalOnward;
 
   return (
     <div className="grid gap-6">
@@ -38,6 +53,40 @@ export function ReportsView({ data }: { data: ReportsData }) {
         />
       ) : (
         <>
+          <div className="bg-card rounded-lg border p-4">
+            <p className="mb-3 text-sm font-medium">
+              Landed Cost (last six months)
+            </p>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                { label: "Goods", value: totalGoods },
+                { label: "Inbound freight", value: totalInbound },
+                { label: "Onward freight", value: totalOnward },
+              ].map((cell) => (
+                <div key={cell.label} className="bg-muted/40 rounded-md p-3">
+                  <p className="font-qty text-lg leading-none">
+                    {formatRupees(cell.value)}
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    {cell.label}
+                  </p>
+                </div>
+              ))}
+              <div className="bg-primary/10 rounded-md p-3">
+                <p className="font-qty text-primary text-lg leading-none">
+                  {formatRupees(totalLanded)}
+                </p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Total landed cost
+                </p>
+              </div>
+            </div>
+            <p className="text-muted-foreground mt-3 text-xs">
+              Onward freight is what it cost to move goods on from the
+              receiving godown — counted once, never re-purchased.
+            </p>
+          </div>
+
           <div className="bg-card rounded-lg border p-4">
             <p className="mb-4 text-sm font-medium">Monthly Purchase Spend</p>
             <div className="flex items-end gap-4" style={{ height: 160 }}>

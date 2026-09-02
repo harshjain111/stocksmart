@@ -27,9 +27,10 @@ const manualEntrySchema = z.object({
 export type ManualEntryInput = z.infer<typeof manualEntrySchema>;
 
 type BuyLineView = {
-  rawMaterialId: string;
-  rawMaterialName: string;
-  rawMaterialCode: string | null;
+  itemType: "raw" | "flavour";
+  itemId: string;
+  itemName: string;
+  itemCode: string | null;
   neededG: number;
   haveG: number;
   onOrderG: number;
@@ -192,7 +193,11 @@ export async function getWhatToBuyData(
     }
   }
 
-  // Source 3: manual entry, resolved to the picked branch's godown.
+  // Source 3: manual entry, resolved to the picked branch's godown. A
+  // manually-entered flavour is a ready-made purchase of that flavour, not
+  // a request to mix it — so it's flagged directPurchase and never
+  // explodes through the recipe. Requisition/par demand above deliberately
+  // isn't flagged, keeping CLAUDE.md's buying logic intact.
   for (const entry of parsedManual.data) {
     if (!branchScope.includes(entry.branchId)) continue;
     const godown = godowns.get(entry.branchId);
@@ -202,6 +207,7 @@ export async function getWhatToBuyData(
       itemId: entry.itemId,
       qtyG: entry.qtyG,
       departmentId: godown.id,
+      directPurchase: entry.itemType === "flavour",
     });
   }
 
@@ -213,6 +219,13 @@ export async function getWhatToBuyData(
   const flavourIds = [
     ...new Set(demand.filter((d) => d.itemType === "flavour").map((d) => d.itemId)),
   ];
+  // Only flavours we intend to mix need a recipe; a ready-made purchase
+  // doesn't, so "no current version" must not be reported against it.
+  const explodedFlavourIds = new Set(
+    demand
+      .filter((d) => d.itemType === "flavour" && !d.directPurchase)
+      .map((d) => d.itemId),
+  );
 
   const [
     { data: balances },
@@ -228,14 +241,14 @@ export async function getWhatToBuyData(
     admin
       .from("po_lines")
       .select(
-        "raw_material_id, qty_g, purchase_orders!inner(ship_to_department_id, status)",
+        "raw_material_id, flavour_id, qty_g, purchase_orders!inner(ship_to_department_id, status)",
       )
       .in("purchase_orders.ship_to_department_id", departmentIds)
       .in("purchase_orders.status", ["draft", "sent", "partially_received"]),
     flavourIds.length > 0
       ? admin
           .from("flavours")
-          .select("id, name, current_version_id")
+          .select("id, code, name, current_version_id, default_supplier_id")
           .in("id", flavourIds)
       : Promise.resolve({ data: [] }),
     admin
@@ -285,6 +298,15 @@ export async function getWhatToBuyData(
       supplierId: m.default_supplier_id as string,
     }));
 
+  const flavourSuppliers: NonNullable<BuyEngineInput["flavourSuppliers"]> = (
+    flavours ?? []
+  )
+    .filter((f) => !!f.default_supplier_id)
+    .map((f) => ({
+      flavourId: f.id,
+      supplierId: f.default_supplier_id as string,
+    }));
+
   const stockBalances: BuyEngineInput["stockBalances"] = (balances ?? []).map(
     (b) => ({
       departmentId: b.department_id,
@@ -299,7 +321,8 @@ export async function getWhatToBuyData(
       departmentId: (
         r.purchase_orders as unknown as { ship_to_department_id: string }
       ).ship_to_department_id,
-      rawMaterialId: r.raw_material_id,
+      itemType: r.raw_material_id ? ("raw" as const) : ("flavour" as const),
+      itemId: (r.raw_material_id ?? r.flavour_id) as string,
       qtyG: r.qty_g,
     }),
   );
@@ -310,6 +333,7 @@ export async function getWhatToBuyData(
     openPoLines,
     currentRecipeVersions,
     defaultSuppliers,
+    flavourSuppliers,
   });
 
   const rawMaterialById = new Map((rawMaterials ?? []).map((m) => [m.id, m]));
@@ -329,7 +353,7 @@ export async function getWhatToBuyData(
   const flavourById = new Map((flavours ?? []).map((f) => [f.id, f]));
   const displayIssues = [
     ...issues,
-    ...[...new Set(flavourIds)]
+    ...[...explodedFlavourIds]
       .filter((id) => !flavourById.get(id)?.current_version_id)
       .map(
         (id) =>
@@ -344,15 +368,22 @@ export async function getWhatToBuyData(
     departmentId: g.departmentId,
     departmentName: departmentNameById.get(g.departmentId) ?? "Unknown",
     branchId: branchIdByDepartmentId.get(g.departmentId) ?? "",
-    lines: g.lines.map((l) => ({
-      rawMaterialId: l.rawMaterialId,
-      rawMaterialName: rawMaterialById.get(l.rawMaterialId)?.name ?? "Unknown",
-      rawMaterialCode: rawMaterialById.get(l.rawMaterialId)?.code ?? null,
-      neededG: l.neededG,
-      haveG: l.haveG,
-      onOrderG: l.onOrderG,
-      buyG: l.buyG,
-    })),
+    lines: g.lines.map((l) => {
+      const item =
+        l.itemType === "raw"
+          ? rawMaterialById.get(l.itemId)
+          : flavourById.get(l.itemId);
+      return {
+        itemType: l.itemType,
+        itemId: l.itemId,
+        itemName: item?.name ?? "Unknown",
+        itemCode: item?.code ?? null,
+        neededG: l.neededG,
+        haveG: l.haveG,
+        onOrderG: l.onOrderG,
+        buyG: l.buyG,
+      };
+    }),
   }));
 
   return {
@@ -368,7 +399,8 @@ const createOrdersSchema = z.array(
     lines: z
       .array(
         z.object({
-          rawMaterialId: z.uuid(),
+          itemType: z.enum(["raw", "flavour"]),
+          itemId: z.uuid(),
           qtyG: z.coerce.number().int().positive(),
           // A blank rate is valid — it marks the order rate-to-confirm.
           rate: z.coerce.number().nonnegative().nullable().optional(),
@@ -450,7 +482,8 @@ export async function createDraftOrders(
     const { error: linesError } = await supabase.from("po_lines").insert(
       group.lines.map((line) => ({
         purchase_order_id: po.id,
-        raw_material_id: line.rawMaterialId,
+        raw_material_id: line.itemType === "raw" ? line.itemId : null,
+        flavour_id: line.itemType === "flavour" ? line.itemId : null,
         qty_g: line.qtyG,
         rate: line.rate ?? null,
       })),

@@ -54,6 +54,20 @@ export default async function PurchaseReportsPage() {
   };
   const grnRows = (grns ?? []) as unknown as GrnRow[];
 
+  // Onward legs: freight on transfers dispatched in the window. Supplier
+  // -> godown freight is already on the GRNs above; this is everything
+  // after that, so landed cost reflects the whole journey rather than
+  // just the inbound leg.
+  let transferQuery = admin
+    .from("transfers")
+    .select("dispatched_at, transportation_cost, branch_id")
+    .not("transportation_cost", "is", null)
+    .gte("dispatched_at", windowStart.toISOString());
+  if (session.role !== "admin") {
+    transferQuery = transferQuery.eq("branch_id", session.branchId ?? "");
+  }
+  const { data: transferLegs } = await transferQuery;
+
   const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const monthLabel = (d: Date) => d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 
@@ -65,6 +79,7 @@ export default async function PurchaseReportsPage() {
 
   const spendByMonth = new Map<string, number>();
   const transportByMonth = new Map<string, number>();
+  const onwardFreightByMonth = new Map<string, number>();
   const spendByBranch = new Map<string, number>();
   const itemAgg = new Map<
     string,
@@ -102,6 +117,18 @@ export default async function PurchaseReportsPage() {
     }
   }
 
+  for (const t of (transferLegs ?? []) as unknown as {
+    dispatched_at: string | null;
+    transportation_cost: number | null;
+  }[]) {
+    if (!t.dispatched_at || t.transportation_cost == null) continue;
+    const key = monthKey(new Date(t.dispatched_at));
+    onwardFreightByMonth.set(
+      key,
+      (onwardFreightByMonth.get(key) ?? 0) + Number(t.transportation_cost),
+    );
+  }
+
   const rawIds = [...itemAgg.values()].filter((e) => e.itemType === "raw").map((e) => e.itemId);
   const flavourIds = [...itemAgg.values()].filter((e) => e.itemType === "flavour").map((e) => e.itemId);
   const [{ data: rawMaterials }, { data: flavours }] = await Promise.all([
@@ -121,6 +148,7 @@ export default async function PurchaseReportsPage() {
       label: m.label,
       spendRupees: spendByMonth.get(m.key) ?? 0,
       transportRupees: transportByMonth.get(m.key) ?? 0,
+      onwardFreightRupees: onwardFreightByMonth.get(m.key) ?? 0,
     })),
     itemWise: [...itemAgg.values()]
       .sort((a, b) => b.valueRupees - a.valueRupees)
