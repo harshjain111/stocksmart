@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Scale, Building2, Package, TrendingUpDown } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import {
@@ -148,11 +147,11 @@ export function CountVarianceView({
 
   if (detail.length === 0) {
     return (
-      <div className="flex flex-col gap-6 p-6">
-        <PageHeader
-          title="Count variance"
-          description="System vs physical, by department, by item and by period."
-        />
+      <div className="flex flex-col gap-6">
+        <div>
+        <h2 className="text-base font-semibold">Count variance</h2>
+        <p className="text-muted-foreground text-sm">System vs physical, by department, by item and by period.</p>
+        </div>
         <EmptyState
           icon={Scale}
           title="No approved counts with differences yet"
@@ -168,11 +167,11 @@ export function CountVarianceView({
   );
 
   return (
-    <div className="flex flex-col gap-8 p-6">
-      <PageHeader
-        title="Count variance"
-        description="System vs physical — the fourth leakage source. Only approved counts count."
-      />
+    <div className="flex flex-col gap-8">
+      <div>
+        <h2 className="text-base font-semibold">Count variance</h2>
+        <p className="text-muted-foreground text-sm">System vs physical — the fourth leakage source. Only approved counts count.</p>
+        </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard

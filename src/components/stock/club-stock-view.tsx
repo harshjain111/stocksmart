@@ -1,0 +1,243 @@
+"use client";
+
+import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Users,
+  TriangleAlert,
+  CircleOff,
+  Clock,
+  RefreshCw,
+  Info,
+  Search,
+  Martini,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { formatGrams } from "@/lib/units";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusTag } from "@/components/shared/status-tag";
+import { EmptyState } from "@/components/shared/empty-state";
+import {
+  triggerClubSync,
+  type ClubStockData,
+} from "@/app/(app)/stock/club/actions";
+
+const TONE_CLASSES: Record<string, string> = {
+  info: "bg-info/10 text-info",
+  warning: "bg-warning/20 text-warning-foreground",
+  destructive: "bg-destructive/10 text-destructive",
+  primary: "bg-primary/10 text-primary",
+};
+
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return "never";
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function ClubStockView({ data }: { data: ClubStockData }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [status, setStatus] = React.useState(params.get("status") ?? "all");
+  const [search, setSearch] = React.useState("");
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const [syncMessage, setSyncMessage] = React.useState<string | null>(null);
+
+  const filtered = React.useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return data.rows.filter((r) => {
+      if (status !== "all" && r.status !== status) return false;
+      if (!term) return true;
+      return (
+        r.clubName.toLowerCase().includes(term) ||
+        r.flavourName.toLowerCase().includes(term)
+      );
+    });
+  }, [data.rows, status, search]);
+
+  async function handleSync() {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    const result = await triggerClubSync();
+    setIsSyncing(false);
+    if (result.status === "success") {
+      setSyncMessage(
+        `Synced ${result.items} item${result.items === 1 ? "" : "s"} across ${result.clubs} club${result.clubs === 1 ? "" : "s"}.`,
+      );
+      router.refresh();
+    } else {
+      setSyncMessage(result.message);
+    }
+  }
+
+  const syncFailed = data.lastSyncStatus === "failed";
+  const notConfigured = !data.configured;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">Club Stock</h2>
+          <p className="text-muted-foreground text-sm">
+            Live stock from the Club app. Minimum requirements are used to
+            identify low-stock clubs.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground text-xs">
+            Last synced: {fmtDateTime(data.lastSyncedAt)}
+          </span>
+          <Button variant="secondary" disabled={isSyncing} onClick={handleSync}>
+            <RefreshCw className={cn(isSyncing && "animate-spin")} />
+            {isSyncing ? "Syncing…" : "Sync Now"}
+          </Button>
+        </div>
+      </div>
+
+      {(notConfigured || syncFailed) && (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-md border p-3 text-sm",
+            "border-warning/40 bg-warning/15 text-warning-foreground",
+          )}
+          role="status"
+        >
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <p className="font-medium">
+              {notConfigured
+                ? "Club API is not configured"
+                : "Unable to sync Club stock"}
+            </p>
+            <p className="mt-0.5">
+              {notConfigured
+                ? "Set CLUB_API_URL to connect the Club app. Figures below are whatever was last stored."
+                : data.lastSyncError ?? "The Club app could not be reached."}{" "}
+              {data.rows.length > 0 && (
+                <>
+                  Showing last synced data from{" "}
+                  {fmtDateTime(data.lastSyncedAt ?? data.rows[0]?.syncedAt)}.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {syncMessage && <p className="text-sm">{syncMessage}</p>}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { icon: Users, tone: "info", value: data.kpis.totalClubs, label: "Total Clubs" },
+          { icon: TriangleAlert, tone: "warning", value: data.kpis.clubsLow, label: "Clubs Low Stock" },
+          { icon: CircleOff, tone: "destructive", value: data.kpis.outOfStock, label: "Out of Stock" },
+          { icon: Clock, tone: "primary", value: data.kpis.approaching, label: "Approaching Limit" },
+        ].map((kpi) => (
+          <div key={kpi.label} className="bg-card flex items-start gap-3 rounded-lg border p-4">
+            <span
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                TONE_CLASSES[kpi.tone],
+              )}
+            >
+              <kpi.icon className="size-5" />
+            </span>
+            <div>
+              <p className="font-qty text-lg leading-none">{kpi.value}</p>
+              <p className="text-muted-foreground mt-1 text-xs">{kpi.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-52 flex-1">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+          <Input
+            aria-label="Search club or flavour"
+            placeholder="Search club or flavour…"
+            className="pl-8"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          aria-label="Status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="border-input bg-card h-9 rounded-md border px-3 text-sm"
+        >
+          <option value="all">All Status</option>
+          <option value="ok">OK</option>
+          <option value="low">Low Stock</option>
+          <option value="out">Out of Stock</option>
+          <option value="approaching">Approaching Limit</option>
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={Martini}
+          title="No club stock data available"
+          description={
+            notConfigured
+              ? "Connect the Club app to pull live club stock into this screen."
+              : "Nothing matches this filter, or the last sync returned no rows."
+          }
+        />
+      ) : (
+        <div className="bg-card overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr className="text-muted-foreground border-b text-left text-xs">
+                <th className="px-4 py-2.5 font-medium">Club</th>
+                <th className="px-4 py-2.5 font-medium">Location</th>
+                <th className="px-4 py-2.5 font-medium">Flavour</th>
+                <th className="px-4 py-2.5 text-right font-medium">Current</th>
+                <th className="px-4 py-2.5 text-right font-medium">Minimum</th>
+                <th className="px-4 py-2.5 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row) => (
+                <tr
+                  key={`${row.clubId}-${row.flavourName}`}
+                  className="border-b last:border-0"
+                >
+                  <td className="px-4 py-2.5 font-medium">{row.clubName}</td>
+                  <td className="text-muted-foreground px-4 py-2.5">
+                    {row.branchName}
+                  </td>
+                  <td className="px-4 py-2.5">{row.flavourName}</td>
+                  <td className="font-qty px-4 py-2.5 text-right whitespace-nowrap">
+                    {formatGrams(row.currentG)}
+                  </td>
+                  <td className="font-qty text-muted-foreground px-4 py-2.5 text-right whitespace-nowrap">
+                    {row.minimumG == null ? "—" : formatGrams(row.minimumG)}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <StatusTag
+                      status={row.status === "out" ? "out_of_stock" : row.status}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="text-muted-foreground flex items-center gap-2 rounded-md border p-3 text-xs">
+        <Info className="size-4 shrink-0" />
+        Club stock is fetched from the Club app via API. It cannot be edited
+        here.
+      </div>
+    </div>
+  );
+}

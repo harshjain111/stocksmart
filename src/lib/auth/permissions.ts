@@ -14,6 +14,12 @@ export type Permission =
   | "nav:setup"
   | "recipes:read"
   | "requisitions:approve"
+  | "stock:update"
+  | "stock:party"
+  | "stock:count"
+  | "stock:approve-count"
+  | "stock:opening"
+  | "stock:club"
   | "purchase:manage"
   | "purchase:history"
   | "setup:manage";
@@ -29,6 +35,10 @@ const ROLE_PERMISSIONS: Record<Exclude<UserRole, "admin">, Permission[]> = {
     "nav:stock",
     "requisitions:approve",
     "purchase:manage",
+    "stock:update",
+    "stock:party",
+    "stock:count",
+    "stock:club",
   ],
   store_manager: [
     "nav:home",
@@ -36,6 +46,12 @@ const ROLE_PERMISSIONS: Record<Exclude<UserRole, "admin">, Permission[]> = {
     "nav:send-receive",
     "nav:stock",
     "requisitions:approve",
+    "stock:update",
+    "stock:party",
+    "stock:count",
+    "stock:approve-count",
+    "stock:opening",
+    "stock:club",
   ],
   purchase_manager: [
     "nav:home",
@@ -44,7 +60,18 @@ const ROLE_PERMISSIONS: Record<Exclude<UserRole, "admin">, Permission[]> = {
     "purchase:manage",
     "purchase:history",
   ],
-  hod: ["nav:home", "nav:requisitions", "nav:send-receive", "nav:stock"],
+  hod: [
+    "nav:home",
+    "nav:requisitions",
+    "nav:send-receive",
+    "nav:stock",
+    "stock:update",
+    "stock:party",
+  ],
+  // §25/§72: party movement and nothing else. No nav:stock — the Stock
+  // section as a whole is closed to him; /stock/party is reached directly
+  // and guarded on stock:party.
+  gate_man: ["stock:party"],
   senior_mixer: ["nav:home", "nav:mix", "nav:recipes", "recipes:read"],
   mixer: ["nav:home", "nav:mix"],
 };

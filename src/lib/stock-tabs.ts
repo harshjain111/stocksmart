@@ -1,35 +1,44 @@
 import type { UserRole } from "@/lib/auth/session";
+import { can, type Permission } from "@/lib/auth/permissions";
 
 export type StockTab = {
   label: string;
   href: string;
-  roles: UserRole[];
+  permission: Permission;
 };
 
+// Ordered as the spec's information architecture (§5, §74): the daily work
+// first, then reconciliation, then the read-only external view, and
+// Opening Stock deliberately last because it is one-time setup rather than
+// anything anyone does twice.
 export const STOCK_TABS: StockTab[] = [
+  { label: "Overview", href: "/stock", permission: "nav:stock" },
+  { label: "Update Stock", href: "/stock/update", permission: "stock:update" },
+  { label: "Party Stock", href: "/stock/party", permission: "stock:party" },
   {
-    label: "What we have",
-    href: "/stock",
-    roles: ["admin", "branch_manager", "store_manager", "hod"],
-  },
-  {
-    label: "Opening stock",
-    href: "/stock/opening",
-    roles: ["admin", "store_manager"],
-  },
-  {
-    label: "Count stock",
+    label: "Count & Variance",
     href: "/stock/count",
-    roles: ["admin", "branch_manager", "store_manager", "hod"],
+    permission: "stock:count",
   },
-  {
-    label: "Count variance",
-    href: "/stock/variance",
-    roles: ["admin", "branch_manager", "store_manager", "hod"],
-  },
+  { label: "Club Stock", href: "/stock/club", permission: "stock:club" },
+  { label: "Opening Stock", href: "/stock/opening", permission: "stock:opening" },
 ];
 
 export function canAccessStockTab(role: UserRole, href: string): boolean {
   const tab = STOCK_TABS.find((t) => t.href === href);
-  return tab ? tab.roles.includes(role) : false;
+  return tab ? can(role, tab.permission) : false;
+}
+
+export function visibleStockTabs(role: UserRole): StockTab[] {
+  return STOCK_TABS.filter((tab) => can(role, tab.permission));
+}
+
+/**
+ * Where to send someone who lands on /stock without permission to see the
+ * Overview. A gate man has exactly one stock page, and bouncing him to the
+ * home screen he also cannot use would be a dead end (§72).
+ */
+export function stockLandingHref(role: UserRole): string | null {
+  const tabs = visibleStockTabs(role);
+  return tabs[0]?.href ?? null;
 }

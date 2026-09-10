@@ -5,6 +5,7 @@ import {
   FlaskConical,
   Home,
   Package,
+  PartyPopper,
   Settings,
   ShoppingCart,
   type LucideIcon,
@@ -51,6 +52,16 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Package,
     permission: "nav:stock",
   },
+  // The gate man's only screen. It is its own top-level entry rather than
+  // living under Stock because he has no access to the Stock section at
+  // all — a "Stock" link that opened straight into one sub-page would
+  // misrepresent what he can reach (§25, §46).
+  {
+    label: "Party Stock",
+    href: "/stock/party",
+    icon: PartyPopper,
+    permission: "stock:party",
+  },
   {
     label: "Recipes",
     href: "/recipes",
@@ -66,5 +77,10 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export function getVisibleNavItems(role: UserRole): NavItem[] {
-  return NAV_ITEMS.filter((item) => can(role, item.permission));
+  const items = NAV_ITEMS.filter((item) => can(role, item.permission));
+  // Anyone who can open the Stock section reaches Party Stock through its
+  // internal tabs, so the standalone entry would be a duplicate for them.
+  return can(role, "nav:stock")
+    ? items.filter((item) => item.href !== "/stock/party")
+    : items;
 }

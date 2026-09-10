@@ -9,7 +9,10 @@ export type UserRole =
   | "purchase_manager"
   | "hod"
   | "senior_mixer"
-  | "mixer";
+  | "mixer"
+  // Party movements only (spec §25): records what left for a party and what
+  // came back, and is shown nothing else anywhere in the app.
+  | "gate_man";
 
 export type DepartmentSummary = {
   id: string;

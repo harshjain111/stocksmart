@@ -30,6 +30,17 @@ const STATUS_TONE: Record<string, Tone> = {
   current: "info",
   archived: "muted",
   cancelled: "destructive",
+  // Party movement (spec §22) and stock levels (§10).
+  out: "warning",
+  partially_returned: "warning",
+  completed: "primary",
+  pending: "destructive",
+  ok: "success",
+  low: "warning",
+  out_of_stock: "destructive",
+  approaching: "info",
+  daily_close: "info",
+  full_count: "neutral",
 };
 
 const TONE_CLASSES: Record<Tone, string> = {

@@ -2,12 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Lock, PackageOpen, Package, FlaskConical, Building2 } from "lucide-react";
+import { Lock, TriangleAlert, PackageOpen, Package, FlaskConical, Building2 } from "lucide-react";
 import {
   getDepartmentOpeningData,
   submitOpeningStock,
 } from "@/app/(app)/stock/opening/actions";
-import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
@@ -134,8 +133,10 @@ export function OpeningStockView({
 
   if (departments.length === 0) {
     return (
-      <div className="grid gap-6 p-6">
-        <PageHeader title="Opening stock" />
+      <div className="grid gap-6">
+        <div>
+        <h2 className="text-base font-semibold">Opening stock</h2>
+        </div>
         <EmptyState
           icon={PackageOpen}
           title="No departments yet"
@@ -146,11 +147,22 @@ export function OpeningStockView({
   }
 
   return (
-    <div className="grid gap-6 p-6">
-      <PageHeader
-        title="Opening stock"
-        description="One-time starting quantities per department. Locks once submitted."
-      />
+    <div className="grid gap-6">
+      <div>
+        <h2 className="text-base font-semibold">Opening stock</h2>
+        <p className="text-muted-foreground text-sm">One-time starting quantities per department. Locks once submitted.</p>
+        </div>
+
+      {/* §34: the one-way nature of this screen has to be stated before
+          anyone types into it, not discovered afterwards. */}
+      <div className="border-warning/40 bg-warning/15 text-warning-foreground flex items-start gap-2 rounded-md border p-3 text-sm">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+        <span>
+          Opening stock is a one-time setup for new locations. Once submitted
+          it cannot be edited. If corrections are required, use a stock count
+          adjustment instead.
+        </span>
+      </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard

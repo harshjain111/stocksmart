@@ -10,7 +10,6 @@ import {
   submitCount,
   approveCount,
 } from "@/app/(app)/stock/count/actions";
-import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusTag } from "@/components/shared/status-tag";
@@ -192,8 +191,10 @@ export function CountStockView({
 
   if (departments.length === 0) {
     return (
-      <div className="grid gap-6 p-6">
-        <PageHeader title="Count stock" />
+      <div className="grid gap-6">
+        <div>
+        <h2 className="text-base font-semibold">Count stock</h2>
+        </div>
         <EmptyState
           icon={ClipboardList}
           title="No departments yet"
@@ -204,11 +205,11 @@ export function CountStockView({
   }
 
   return (
-    <div className="grid gap-6 p-6">
-      <PageHeader
-        title="Count stock"
-        description="System quantity beside a blank counted box — the difference updates as you type."
-      />
+    <div className="grid gap-6">
+      <div>
+        <h2 className="text-base font-semibold">Count stock</h2>
+        <p className="text-muted-foreground text-sm">System quantity beside a blank counted box — the difference updates as you type.</p>
+        </div>
 
       <Select
         items={departments.map((d) => ({
