@@ -15,6 +15,7 @@
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { retireTestUser } from "./lib/retire-test-user.mjs";
 
 function loadEnvLocal() {
   const text = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
@@ -309,7 +310,7 @@ async function main() {
     await client.auth.signOut();
   } finally {
     console.log("\nCleaning up throwaway test user...");
-    await admin.auth.admin.deleteUser(testUserId);
+    await retireTestUser(admin, testUserId, email);
   }
 
   console.log(

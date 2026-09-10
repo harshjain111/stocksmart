@@ -30,6 +30,7 @@
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { retireTestUsers } from "./lib/retire-test-user.mjs";
 import { computeBuyPlan } from "../src/lib/buy/buy-engine.ts";
 import { can } from "../src/lib/auth/permissions.ts";
 import {
@@ -71,7 +72,16 @@ function assertEq(label, actual, expected) {
 }
 
 const stamp = Date.now().toString(36);
-const created = { userIds: [], poIds: [], grnIds: [], transferIds: [] };
+const created = {
+  userIds: [],
+  poIds: [],
+  grnIds: [],
+  transferIds: [],
+  supplierIds: [],
+  materialIds: [],
+  flavourIds: [],
+};
+const emailById = new Map();
 
 async function main() {
   // ---------------------------------------------------------------- setup
@@ -102,6 +112,7 @@ async function main() {
     ])
     .select("id, name");
   const [supA, supB, supC] = suppliers;
+  created.supplierIds.push(...suppliers.map((r) => r.id));
 
   const { data: materials, error: matErr } = await admin
     .from("raw_materials")
@@ -114,12 +125,14 @@ async function main() {
     .select("id, name");
   if (matErr) throw new Error(`create materials: ${matErr.message}`);
   const [matA1, matA2, matB1, matOrphan] = materials;
+  created.materialIds.push(...materials.map((r) => r.id));
 
   const { data: flavour } = await admin
     .from("flavours")
     .insert({ name: `ZZ Test Flavour ${stamp}`, default_supplier_id: supC.id })
     .select("id, name")
     .single();
+  created.flavourIds.push(flavour.id);
 
   // =============================================== 1-5: supplier grouping
   console.log("=== Grouping (scenarios 1-5) ===");
@@ -295,6 +308,7 @@ async function main() {
   });
   if (userErr) throw new Error(`create test user: ${userErr.message}`);
   created.userIds.push(userRes.user.id);
+  emailById.set(userRes.user.id, email);
   await admin.from("profiles").insert({
     id: userRes.user.id,
     full_name: "Purchases Flow Test Admin",
@@ -561,6 +575,7 @@ async function main() {
   });
   if (storeErr) throw new Error(`create store user: ${storeErr.message}`);
   created.userIds.push(storeRes.user.id);
+  emailById.set(storeRes.user.id, storeEmail);
   await admin.from("profiles").insert({
     id: storeRes.user.id,
     full_name: "Purchases Flow Test Store Manager",
@@ -658,29 +673,53 @@ async function main() {
     ),
   );
 
-  // ------------------------------------------------------------- cleanup
-  console.log("\nCleaning up (documents are immutable — masters archived)…");
-  for (const id of created.userIds) await admin.auth.admin.deleteUser(id);
-  await admin.from("raw_materials").update({ is_active: false }).in(
-    "id",
-    materials.map((m) => m.id),
-  );
-  await admin.from("flavours").update({ is_active: false }).eq("id", flavour.id);
-  await admin.from("suppliers").update({ is_active: false }).in(
-    "id",
-    suppliers.map((s) => s.id),
-  );
-
   console.log(
     `\n${failures.length === 0 ? "ALL PASSED" : `${failures.length} FAILED`}`,
   );
   if (failures.length > 0) {
     console.log(failures.map((f) => ` - ${f}`).join("\n"));
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+/**
+ * Runs whether main() finished, failed an assertion or threw — an early
+ * exit used to skip this entirely, which is how throwaway admin accounts
+ * ended up accumulating on a live project.
+ */
+async function cleanup() {
+  console.log("\nCleaning up (documents are immutable — masters archived)…");
+  if (created.materialIds.length > 0) {
+    await admin
+      .from("raw_materials")
+      .update({ is_active: false })
+      .in("id", created.materialIds);
+  }
+  if (created.flavourIds.length > 0) {
+    await admin
+      .from("flavours")
+      .update({ is_active: false })
+      .in("id", created.flavourIds);
+  }
+  if (created.supplierIds.length > 0) {
+    await admin
+      .from("suppliers")
+      .update({ is_active: false })
+      .in("id", created.supplierIds);
+  }
+  await retireTestUsers(admin, created.userIds, (id) => emailById.get(id) ?? id);
+}
+
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    try {
+      await cleanup();
+    } catch (err) {
+      console.error("Cleanup failed:", err.message);
+      process.exitCode = 1;
+    }
+  });

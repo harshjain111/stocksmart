@@ -10,6 +10,7 @@
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { retireTestUser } from "./lib/retire-test-user.mjs";
 
 function loadEnvLocal() {
   const text = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
@@ -34,6 +35,11 @@ const admin = createClient(
 );
 
 const failures = [];
+
+// Recorded as they are created so teardown never depends on main()
+// reaching its final line — a failed assertion used to skip cleanup and
+// strand a throwaway admin account on a live project.
+const created = { flavourId: null, materialIds: [], userId: null, userEmail: null };
 function assertTrue(label, condition) {
   console.log(`  ${condition ? "PASS" : "FAIL"} ${label}`);
   if (!condition) failures.push(label);
@@ -45,16 +51,19 @@ async function main() {
     .insert({ name: "Test Immutability Flavour" })
     .select()
     .single();
+  created.flavourId = flavour.id;
   const { data: rm1 } = await admin
     .from("raw_materials")
     .insert({ name: "Test Material A" })
     .select()
     .single();
+  created.materialIds.push(rm1.id);
   const { data: rm2 } = await admin
     .from("raw_materials")
     .insert({ name: "Test Material B" })
     .select()
     .single();
+  created.materialIds.push(rm2.id);
 
   // 1. Valid version (lines sum to 100) should succeed.
   const { data: version, error: versionErr } = await admin
@@ -151,6 +160,8 @@ async function main() {
     email_confirm: true,
   });
   if (testUserErr) throw new Error(`create test user: ${testUserErr.message}`);
+  created.userId = testUser.user.id;
+  created.userEmail = testEmail;
   const { data: hq } = await admin
     .from("branches")
     .select("id")
@@ -197,31 +208,50 @@ async function main() {
   );
   await anon.auth.signOut();
 
-  // Cleanup. The recipe_versions/recipe_lines rows this test created can't
-  // be deleted (that's the whole point) and the flavour/materials can't
-  // either once referenced by a version — so archive them instead of
-  // leaving "active" fake entries in the real Materials/Flavours screens.
-  await admin.from("audit_log").delete().eq("entity_id", flavour.id);
-  await admin
-    .from("flavours")
-    .update({ is_active: false })
-    .eq("id", flavour.id);
-  await admin
-    .from("raw_materials")
-    .update({ is_active: false })
-    .in("id", [rm1.id, rm2.id]);
-  await admin.auth.admin.deleteUser(testUser.user.id);
-
   console.log(
     `\n${failures.length === 0 ? "ALL PASSED" : `${failures.length} FAILED`}`,
   );
   if (failures.length > 0) {
     console.log(failures.map((f) => ` - ${f}`).join("\n"));
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+/**
+ * The recipe_versions/recipe_lines rows this test creates can't be deleted
+ * (that's the whole point) and the flavour/materials can't either once a
+ * version references them — so archive rather than leaving "active" fake
+ * entries on the real Materials/Flavours screens.
+ */
+async function cleanup() {
+  if (created.flavourId) {
+    await admin.from("audit_log").delete().eq("entity_id", created.flavourId);
+    await admin
+      .from("flavours")
+      .update({ is_active: false })
+      .eq("id", created.flavourId);
+  }
+  if (created.materialIds.length > 0) {
+    await admin
+      .from("raw_materials")
+      .update({ is_active: false })
+      .in("id", created.materialIds);
+  }
+  if (created.userId) {
+    await retireTestUser(admin, created.userId, created.userEmail);
+  }
+}
+
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    try {
+      await cleanup();
+    } catch (err) {
+      console.error("Cleanup failed:", err.message);
+      process.exitCode = 1;
+    }
+  });
