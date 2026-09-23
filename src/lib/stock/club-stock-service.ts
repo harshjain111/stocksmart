@@ -11,6 +11,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * figures with an honest timestamp, rather than zeros that would read as
  * "every club is empty" (§39).
  *
+ * Venues and flavours are treated differently on purpose. A venue is
+ * unambiguous — the Club App knows every club it serves, so one we have
+ * not seen is simply a club we have not recorded, and the sync creates it.
+ * A flavour is not: "Paan Kiwi" might be our "Paan Kiwi Mint", might be
+ * something we do not stock, and guessing wrong silently attributes one
+ * product's stock to another. That stays a human decision.
+ *
  * Two places where the live API differs from its own integration guide,
  * both of which would corrupt stock if taken on trust:
  *
@@ -53,6 +60,7 @@ export type SyncResult =
       clubs: number;
       items: number;
       unmapped: number;
+      venuesCreated: number;
       at: string;
     }
   | { status: "not_configured"; message: string }
@@ -72,7 +80,7 @@ export function isClubApiConfigured(): boolean {
 }
 
 /** Normalised key used to match a name across the two systems. */
-function nameKey(value: string): string {
+export function nameKey(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
@@ -80,7 +88,7 @@ function nameKey(value: string): string {
  * What the Club App calls this thing: its UUID where it has one, and a
  * normalised name where it does not.
  */
-function externalKey(id: string | null, name: string): string {
+export function externalKey(id: string | null, name: string): string {
   return id ?? `name:${nameKey(name)}`;
 }
 
@@ -156,9 +164,6 @@ function toGrams(
   if (normalised === "packets" || normalised === "packet") {
     return Math.round(quantity * (packetWeightG ?? DEFAULT_PACKET_WEIGHT_G));
   }
-  // "grams" and anything unrecognised are treated as grams, which is what
-  // the live API sends. An unknown unit is reported rather than guessed —
-  // see the caller.
   return Math.round(quantity);
 }
 
@@ -172,7 +177,9 @@ function parsePage(payload: unknown): {
     pagination?: { total_pages?: number };
   };
   if (!Array.isArray(body.data)) {
-    throw new Error("Club App returned an unexpected shape — expected a data array.");
+    throw new Error(
+      "Club App returned an unexpected shape — expected a data array.",
+    );
   }
 
   const unknownUnits = new Set<string>();
@@ -193,8 +200,6 @@ function parsePage(payload: unknown): {
       updated_at?: string | null;
     };
 
-    const clubName = row.club?.name?.trim() ?? "";
-    const flavourName = row.flavour?.name?.trim() ?? "";
     const unit = row.stock?.unit ?? null;
     const packetWeight = row.flavour?.packet_weight_grams ?? null;
     const quantity = Number(row.stock?.quantity ?? 0);
@@ -210,10 +215,10 @@ function parsePage(payload: unknown): {
     const minimum = row.stock?.minimum_required;
     return {
       clubId: row.club?.id ?? null,
-      clubName,
+      clubName: row.club?.name?.trim() ?? "",
       clubLocation: row.club?.location?.trim() || null,
       flavourId: row.flavour?.id ?? null,
-      flavourName,
+      flavourName: row.flavour?.name?.trim() ?? "",
       qtyG: toGrams(quantity, unit, packetWeight),
       minimumQtyG:
         minimum == null ? null : toGrams(Number(minimum), unit, packetWeight),
@@ -224,11 +229,7 @@ function parsePage(payload: unknown): {
     };
   });
 
-  return {
-    rows,
-    totalPages: body.pagination?.total_pages ?? 1,
-    unknownUnits,
-  };
+  return { rows, totalPages: body.pagination?.total_pages ?? 1, unknownUnits };
 }
 
 async function fetchAllClubStock(config: ClubApiConfig): Promise<{
@@ -308,23 +309,30 @@ export async function syncClubStock(userId: string | null): Promise<SyncResult> 
     // Refusing beats guessing: a unit we do not understand cannot be
     // converted to grams, and writing the raw number would silently
     // corrupt every figure for those rows.
-    const message = `Club App sent an unrecognised unit (${[...fetched.unknownUnits].join(", ")}). Nothing was changed.`;
+    const message = `Club App sent an unrecognised unit (${[
+      ...fetched.unknownUnits,
+    ].join(", ")}). Nothing was changed.`;
     await logAttempt("failed", { error: message });
     return { status: "failed", message };
   }
 
-  // Existing confirmed mappings win; names only ever propose a match.
-  const [{ data: venueMaps }, { data: flavourMaps }, { data: clubs }, { data: flavours }] =
-    await Promise.all([
-      admin.from("club_venue_map").select("external_key, department_id"),
-      admin.from("club_flavour_map").select("external_key, flavour_id"),
-      admin
-        .from("departments")
-        .select("id, name")
-        .eq("type", "club")
-        .eq("is_active", true),
-      admin.from("flavours").select("id, name").eq("is_active", true),
-    ]);
+  const [
+    { data: venueMaps },
+    { data: flavourMaps },
+    { data: clubs },
+    { data: flavours },
+    { data: branches },
+  ] = await Promise.all([
+    admin.from("club_venue_map").select("external_key, department_id"),
+    admin.from("club_flavour_map").select("external_key, flavour_id"),
+    admin
+      .from("departments")
+      .select("id, name")
+      .eq("type", "club")
+      .eq("is_active", true),
+    admin.from("flavours").select("id, name").eq("is_active", true),
+    admin.from("branches").select("id, name, is_hq").eq("is_active", true),
+  ]);
 
   const departmentByKey = new Map(
     (venueMaps ?? []).map((m) => [m.external_key, m.department_id]),
@@ -332,14 +340,96 @@ export async function syncClubStock(userId: string | null): Promise<SyncResult> 
   const flavourByKey = new Map(
     (flavourMaps ?? []).map((m) => [m.external_key, m.flavour_id]),
   );
-  const clubByName = new Map(
-    (clubs ?? []).map((c) => [nameKey(c.name), c.id]),
-  );
+  const clubByName = new Map((clubs ?? []).map((c) => [nameKey(c.name), c.id]));
   const flavourByName = new Map(
     (flavours ?? []).map((f) => [nameKey(f.name), f.id]),
   );
+  const branchByName = new Map(
+    (branches ?? []).map((b) => [nameKey(b.name), b.id]),
+  );
+  const hqBranchId =
+    (branches ?? []).find((b) => b.is_hq)?.id ?? (branches ?? [])[0]?.id ?? null;
 
+  // ---- venues: whatever the Club App serves becomes a location here ----
+  // Its location string is matched to a branch by name, falling back to HQ
+  // rather than inventing a branch — a club filed under the wrong name is
+  // obvious on screen, a club filed under the wrong branch quietly changes
+  // who is allowed to see its stock.
+  const venuesSeen = new Map<
+    string,
+    { name: string; location: string | null; clubId: string | null }
+  >();
+  for (const row of fetched.rows) {
+    const key = externalKey(row.clubId, row.clubName);
+    if (!venuesSeen.has(key)) {
+      venuesSeen.set(key, {
+        name: row.clubName,
+        location: row.clubLocation,
+        clubId: row.clubId,
+      });
+    }
+  }
+
+  let venuesCreated = 0;
+  for (const [key, venue] of venuesSeen) {
+    if (departmentByKey.has(key) || !venue.name) continue;
+
+    // A club we already have under the same name is adopted, not duplicated.
+    const existingId = clubByName.get(nameKey(venue.name)) ?? null;
+    let departmentId = existingId;
+
+    if (!departmentId) {
+      if (!hqBranchId) continue;
+      const branchId =
+        (venue.location ? branchByName.get(nameKey(venue.location)) : null) ??
+        hqBranchId;
+      const { data: created, error } = await admin
+        .from("departments")
+        .insert({
+          branch_id: branchId,
+          name: venue.name,
+          type: "club",
+          holds_raw: false,
+          // Clubs hold finished flavours, never raw material.
+          holds_mixed: true,
+          can_mix: false,
+        })
+        .select("id")
+        .single();
+      if (error || !created) continue;
+      departmentId = created.id;
+      venuesCreated += 1;
+      clubByName.set(nameKey(venue.name), departmentId);
+    }
+
+    const { error: mapError } = await admin.from("club_venue_map").upsert(
+      {
+        external_key: key,
+        club_app_club_id: venue.clubId,
+        club_app_name: venue.name,
+        club_app_location: venue.location,
+        department_id: departmentId,
+        auto_created: existingId === null,
+        created_by: userId,
+      },
+      { onConflict: "external_key" },
+    );
+    if (!mapError) departmentByKey.set(key, departmentId);
+  }
+
+  // ---- flavours: catalogue everything, map what we can -----------------
   const now = new Date().toISOString();
+  const catalogue = new Map<
+    string,
+    {
+      external_key: string;
+      club_app_flavour_id: string | null;
+      name: string;
+      last_qty_g: number;
+      club_count: number;
+      last_seen_at: string;
+    }
+  >();
   const snapshots = new Map<
     string,
     {
@@ -356,44 +446,36 @@ export async function syncClubStock(userId: string | null): Promise<SyncResult> 
       synced_at: string;
     }
   >();
-  const unmapped: {
-    external_key: string;
-    club_app_club_id: string | null;
-    club_app_club_name: string;
-    club_app_location: string | null;
-    club_app_flavour_id: string | null;
-    club_app_flavour_name: string;
-    qty_g: number;
-    minimum_qty_g: number | null;
-    status: string | null;
-    missing: "club" | "flavour" | "both";
-    seen_at: string;
-  }[] = [];
   const syncedClubs = new Set<string>();
+  let unmappedRows = 0;
 
   for (const row of fetched.rows) {
+    if (!row.flavourName) continue;
     const venueKey = externalKey(row.clubId, row.clubName);
     const flavourKey = externalKey(row.flavourId, row.flavourName);
 
-    const departmentId =
-      departmentByKey.get(venueKey) ?? clubByName.get(nameKey(row.clubName));
+    const entry = catalogue.get(flavourKey);
+    if (entry) {
+      entry.last_qty_g += row.qtyG;
+      entry.club_count += 1;
+    } else {
+      catalogue.set(flavourKey, {
+        external_key: flavourKey,
+        club_app_flavour_id: row.flavourId,
+        name: row.flavourName,
+        last_qty_g: row.qtyG,
+        club_count: 1,
+        last_seen_at: now,
+      });
+    }
+
+    const departmentId = departmentByKey.get(venueKey);
     const itemId =
-      flavourByKey.get(flavourKey) ?? flavourByName.get(nameKey(row.flavourName));
+      flavourByKey.get(flavourKey) ??
+      flavourByName.get(nameKey(row.flavourName));
 
     if (!departmentId || !itemId) {
-      unmapped.push({
-        external_key: `${venueKey}|${flavourKey}`,
-        club_app_club_id: row.clubId,
-        club_app_club_name: row.clubName,
-        club_app_location: row.clubLocation,
-        club_app_flavour_id: row.flavourId,
-        club_app_flavour_name: row.flavourName,
-        qty_g: row.qtyG,
-        minimum_qty_g: row.minimumQtyG,
-        status: row.status,
-        missing: !departmentId && !itemId ? "both" : !departmentId ? "club" : "flavour",
-        seen_at: now,
-      });
+      unmappedRows += 1;
       continue;
     }
 
@@ -425,6 +507,12 @@ export async function syncClubStock(userId: string | null): Promise<SyncResult> 
     });
   }
 
+  if (catalogue.size > 0) {
+    await admin
+      .from("club_app_flavours")
+      .upsert([...catalogue.values()], { onConflict: "external_key" });
+  }
+
   if (snapshots.size > 0) {
     const { error } = await admin
       .from("club_stock_snapshots")
@@ -437,26 +525,17 @@ export async function syncClubStock(userId: string | null): Promise<SyncResult> 
     }
   }
 
-  // The unmapped list describes the latest sync, so stale entries from a
-  // mapping that has since been made must not linger.
-  await admin
-    .from("club_unmapped_items")
-    .delete()
-    .neq("external_key", "__never__");
-  if (unmapped.length > 0) {
-    await admin.from("club_unmapped_items").insert(unmapped);
-  }
-
   await logAttempt("success", {
     clubs: syncedClubs.size,
     items: snapshots.size,
-    unmapped: unmapped.length,
+    unmapped: unmappedRows,
   });
   return {
     status: "success",
     clubs: syncedClubs.size,
     items: snapshots.size,
-    unmapped: unmapped.length,
+    unmapped: unmappedRows,
+    venuesCreated,
     at: now,
   };
 }

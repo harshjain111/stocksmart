@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Users,
@@ -15,15 +16,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatGrams } from "@/lib/units";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusTag } from "@/components/shared/status-tag";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
   triggerClubSync,
-  mapClubItem,
   type ClubStockData,
-  type UnmappedItem,
 } from "@/app/(app)/stock/club/actions";
 
 const TONE_CLASSES: Record<string, string> = {
@@ -72,8 +71,11 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
     if (result.status === "success") {
       setSyncMessage(
         `Synced ${result.items} item${result.items === 1 ? "" : "s"} across ${result.clubs} club${result.clubs === 1 ? "" : "s"}.` +
+          (result.venuesCreated > 0
+            ? ` Added ${result.venuesCreated} new club${result.venuesCreated === 1 ? "" : "s"} from the Club app.`
+            : "") +
           (result.unmapped > 0
-            ? ` ${result.unmapped} row${result.unmapped === 1 ? "" : "s"} could not be matched — see Needs mapping below.`
+            ? ` ${result.unmapped} row${result.unmapped === 1 ? "" : "s"} need a flavour mapping.`
             : ""),
       );
       router.refresh();
@@ -99,6 +101,12 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
           <span className="text-muted-foreground text-xs">
             Last synced: {fmtDateTime(data.lastSyncedAt)}
           </span>
+          <Link
+            href="/stock/club/mapping"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            <Link2 className="size-4" /> Flavour mapping
+          </Link>
           <Button variant="secondary" disabled={isSyncing} onClick={handleSync}>
             <RefreshCw className={cn(isSyncing && "animate-spin")} />
             {isSyncing ? "Syncing…" : "Sync Now"}
@@ -187,14 +195,18 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
         </select>
       </div>
 
-      {data.unmapped.length > 0 && (
-        <UnmappedSection
-          items={data.unmapped}
-          clubs={data.mappableClubs}
-          flavours={data.mappableFlavours}
-          canMap={data.canMap}
-          onMapped={() => router.refresh()}
-        />
+      {data.unmappedCount > 0 && (
+        <div className="border-warning/40 bg-warning/15 text-warning-foreground flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+          <Link2 className="size-4 shrink-0" />
+          <span className="flex-1">
+            {data.unmappedCount} Club app flavour
+            {data.unmappedCount === 1 ? "" : "s"} {data.unmappedCount === 1 ? "has" : "have"}{" "}
+            no stored mapping. Any without a matching name are not shown below.
+          </span>
+          <Link href="/stock/club/mapping" className={buttonVariants({ size: "sm" })}>
+            Map flavours
+          </Link>
+        </div>
       )}
 
       {filtered.length === 0 ? (
@@ -255,179 +267,6 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
         Club stock is fetched from the Club app via API. It cannot be edited
         here.
       </div>
-    </div>
-  );
-}
-
-/**
- * Rows the Club App sent that could not be placed. Without this they are
- * simply invisible — the stock never arrives and nothing says why. An
- * admin pairs each one with an inventory club or flavour, and the pairing
- * is remembered by the Club App's own id where it has one, so a later
- * rename on either side does not break it.
- */
-function UnmappedSection({
-  items,
-  clubs,
-  flavours,
-  canMap,
-  onMapped,
-}: {
-  items: UnmappedItem[];
-  clubs: { id: string; name: string }[];
-  flavours: { id: string; name: string }[];
-  canMap: boolean;
-  onMapped: () => void;
-}) {
-  const [choices, setChoices] = React.useState<
-    Record<string, { clubId: string; flavourId: string }>
-  >({});
-  const [savingKey, setSavingKey] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  async function save(item: UnmappedItem) {
-    setError(null);
-    setSavingKey(item.externalKey);
-    const choice = choices[item.externalKey] ?? { clubId: "", flavourId: "" };
-    const result = await mapClubItem({
-      externalKey: item.externalKey,
-      clubId: choice.clubId || null,
-      flavourId: choice.flavourId || null,
-    });
-    setSavingKey(null);
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    onMapped();
-  }
-
-  return (
-    <div className="bg-card rounded-lg border">
-      <div className="flex flex-wrap items-center gap-2 border-b p-4">
-        <Link2 className="text-warning-foreground size-4 shrink-0" />
-        <p className="text-sm font-medium">
-          Needs mapping ({items.length})
-        </p>
-        <p className="text-muted-foreground text-xs">
-          {canMap
-            ? "These Club app rows don't match an inventory club or flavour yet. Pair them once and the link is remembered."
-            : "These Club app rows don't match an inventory club or flavour yet. An admin needs to pair them."}
-        </p>
-      </div>
-
-      {error && (
-        <p className="text-destructive px-4 pt-3 text-sm" role="alert">
-          {error}
-        </p>
-      )}
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40">
-            <tr className="text-muted-foreground border-b text-left text-xs">
-              <th className="px-4 py-2.5 font-medium">Club app venue</th>
-              <th className="px-4 py-2.5 font-medium">Club app flavour</th>
-              <th className="px-4 py-2.5 text-right font-medium">Stock</th>
-              {canMap && <th className="px-4 py-2.5 font-medium">Map to</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => {
-              const choice = choices[item.externalKey] ?? {
-                clubId: "",
-                flavourId: "",
-              };
-              const needsClub = item.missing !== "flavour";
-              const needsFlavour = item.missing !== "club";
-              return (
-                <tr key={item.externalKey} className="border-b last:border-0">
-                  <td className="px-4 py-2">
-                    {item.clubName}
-                    {item.location && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {item.location}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">{item.flavourName}</td>
-                  <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
-                    {formatGrams(item.qtyG)}
-                  </td>
-                  {canMap && (
-                    <td className="px-4 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {needsClub && (
-                          <select
-                            aria-label={`Inventory club for ${item.clubName}`}
-                            value={choice.clubId}
-                            onChange={(e) =>
-                              setChoices((prev) => ({
-                                ...prev,
-                                [item.externalKey]: {
-                                  ...choice,
-                                  clubId: e.target.value,
-                                },
-                              }))
-                            }
-                            className="border-input bg-card h-8 rounded-md border px-2 text-xs"
-                          >
-                            <option value="">Select club…</option>
-                            {clubs.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        {needsFlavour && (
-                          <select
-                            aria-label={`Inventory flavour for ${item.flavourName}`}
-                            value={choice.flavourId}
-                            onChange={(e) =>
-                              setChoices((prev) => ({
-                                ...prev,
-                                [item.externalKey]: {
-                                  ...choice,
-                                  flavourId: e.target.value,
-                                },
-                              }))
-                            }
-                            className="border-input bg-card h-8 rounded-md border px-2 text-xs"
-                          >
-                            <option value="">Select flavour…</option>
-                            {flavours.map((f) => (
-                              <option key={f.id} value={f.id}>
-                                {f.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        <Button
-                          size="sm"
-                          disabled={
-                            savingKey === item.externalKey ||
-                            (needsClub && !choice.clubId) ||
-                            (needsFlavour && !choice.flavourId)
-                          }
-                          onClick={() => save(item)}
-                        >
-                          {savingKey === item.externalKey ? "Saving…" : "Map"}
-                        </Button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="text-muted-foreground border-t px-4 py-2.5 text-xs">
-        Mapped rows appear in the table above after the next sync.
-      </p>
     </div>
   );
 }
