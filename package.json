@@ -17,6 +17,7 @@
     "test:confirm-batch": "node scripts/test-confirm-batch.mjs",
     "test:buy-engine": "node --test src/lib/buy/buy-engine.test.ts",
     "test:purchases-flow": "node scripts/test-purchases-flow.mjs",
+    "test:stock-flow": "node scripts/test-stock-flow.mjs",
     "reconcile:stock-balances": "node scripts/reconcile-stock-balances.mjs"
   },
   "dependencies": {

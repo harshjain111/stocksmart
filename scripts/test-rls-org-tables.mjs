@@ -63,6 +63,19 @@ async function main() {
     .eq("name", "Main Godown")
     .single();
 
+  const [{ count: totalDepartments }, { count: guwahatiDepartments }, { count: kolkataDepartments }] =
+    await Promise.all([
+      admin.from("departments").select("id", { count: "exact", head: true }),
+      admin
+        .from("departments")
+        .select("id", { count: "exact", head: true })
+        .eq("branch_id", guwahati.id),
+      admin
+        .from("departments")
+        .select("id", { count: "exact", head: true })
+        .eq("branch_id", kolkata.id),
+    ]);
+
   const runId = Date.now().toString(36);
   const fixtures = [
     { role: "admin", branchId: guwahati.id },
@@ -144,7 +157,11 @@ async function main() {
 
       if (f.role === "admin") {
         assertEqual("branches count", branchIds.length, 2);
-        assertEqual("departments count", deptIds.length, 8);
+        assertEqual(
+          "admin sees every department",
+          deptIds.length,
+          totalDepartments,
+        );
       } else {
         assertEqual("branches count (own branch only)", branchIds.length, 1);
         assertTrue(
@@ -155,9 +172,9 @@ async function main() {
 
       if (f.role === "branch_manager") {
         assertEqual(
-          "departments count (own branch, Guwahati)",
+          "sees exactly their own branch's departments (Guwahati)",
           deptIds.length,
-          5,
+          guwahatiDepartments,
         );
         assertTrue(
           "all visible departments belong to own branch",
@@ -167,9 +184,9 @@ async function main() {
 
       if (f.role === "store_manager") {
         assertEqual(
-          "departments count (own branch, Kolkata)",
+          "sees exactly their own branch's departments (Kolkata)",
           deptIds.length,
-          3,
+          kolkataDepartments,
         );
         assertTrue(
           "all visible departments belong to own branch",

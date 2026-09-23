@@ -15,7 +15,6 @@ import type { Session } from "@/lib/auth/session";
 export type VarianceDetailRow = {
   countId: string;
   countNo: string;
-  kind: "daily_close" | "full_count";
   departmentName: string;
   approvedAt: string | null;
   itemName: string;
@@ -42,7 +41,6 @@ export type VarianceData = {
 type CountRow = {
   id: string;
   count_no: string;
-  kind: "daily_close" | "full_count";
   approved_at: string | null;
   department_id: string;
   departments: { name: string } | null;
@@ -62,7 +60,7 @@ export async function getVarianceData(session: Session): Promise<VarianceData> {
 
   let countsQuery = admin
     .from("stock_counts")
-    .select("id, count_no, kind, approved_at, department_id, departments(name)")
+    .select("id, count_no, approved_at, department_id, departments(name)")
     .eq("status", "approved");
 
   if (session.role === "hod") {
@@ -132,7 +130,6 @@ export async function getVarianceData(session: Session): Promise<VarianceData> {
     return {
       countId: l.count_id,
       countNo: count?.count_no ?? "Unknown",
-      kind: count?.kind ?? "full_count",
       departmentName: count?.departments?.name ?? "Unknown department",
       approvedAt: count?.approved_at ?? null,
       itemName: item?.name ?? "Unknown item",
