@@ -185,7 +185,9 @@ export async function getStockOverview(
     clubIds.length > 0
       ? admin
           .from("club_stock_snapshots")
-          .select("department_id, item_type, item_id, qty_g, synced_at")
+          .select(
+            "department_id, item_type, item_id, qty_g, minimum_qty_g, status, synced_at",
+          )
           .in("department_id", clubIds)
       : Promise.resolve({ data: [] }),
     admin
@@ -264,16 +266,17 @@ export async function getStockOverview(
     );
   }
 
+  // Club minimums come from the Club App alongside the quantity, not from
+  // par_levels — par_levels is our own target for our own locations, and
+  // using it here would give clubs a second, quieter opinion that could
+  // disagree with the system that actually owns them.
   const clubMinByKey = new Map<string, number>();
   const clubMinByDeptItem = new Map<string, number>();
-  for (const p of pars ?? []) {
-    const dept = deptById.get(p.department_id);
-    if (!dept) continue;
-    const key = `${p.item_type}|${p.item_id}`;
-    if (dept.type === "club") {
-      clubMinByKey.set(key, (clubMinByKey.get(key) ?? 0) + p.par_qty_g);
-      clubMinByDeptItem.set(`${p.department_id}|${key}`, p.par_qty_g);
-    }
+  for (const s of clubSnapshots ?? []) {
+    if (s.minimum_qty_g == null) continue;
+    const key = `${s.item_type}|${s.item_id}`;
+    clubMinByKey.set(key, (clubMinByKey.get(key) ?? 0) + s.minimum_qty_g);
+    clubMinByDeptItem.set(`${s.department_id}|${key}`, s.minimum_qty_g);
   }
 
   for (const [key, row] of rowByKey) {
@@ -332,6 +335,16 @@ export async function getStockOverview(
   let clubsLow = 0;
   let clubsOut = 0;
   for (const s of clubSnapshots ?? []) {
+    const reported = (s.status ?? "").trim().toUpperCase();
+    if (reported === "OUT_OF_STOCK") {
+      clubsOut += 1;
+      continue;
+    }
+    if (reported === "LOW") {
+      clubsLow += 1;
+      continue;
+    }
+    if (reported === "OK") continue;
     const minimum =
       clubMinByDeptItem.get(
         `${s.department_id}|${s.item_type}|${s.item_id}`,
@@ -433,7 +446,9 @@ export async function getStockOverview(
     attention,
     activity,
     club: {
-      configured: Boolean(process.env.CLUB_API_URL),
+      configured: Boolean(
+        process.env.CLUB_APP_BASE_URL && process.env.CLUB_APP_API_KEY,
+      ),
       lastSyncedAt: lastSync?.finished_at ?? null,
       lastSyncStatus: lastSync?.status ?? null,
       lastSyncError: lastSync?.error_message ?? null,
