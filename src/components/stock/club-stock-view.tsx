@@ -21,6 +21,11 @@ import { Input } from "@/components/ui/input";
 import { StatusTag } from "@/components/shared/status-tag";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
+  DataTable,
+  type DataTableColumn,
+} from "@/components/shared/data-table";
+import type { ClubStockRowView } from "@/app/(app)/stock/club/actions";
+import {
   triggerClubSync,
   type ClubStockData,
 } from "@/app/(app)/stock/club/actions";
@@ -83,6 +88,48 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
       setSyncMessage(result.message);
     }
   }
+
+  const columns: DataTableColumn<ClubStockRowView>[] = [
+    {
+      key: "club",
+      header: "Club",
+      cardRole: "title",
+      render: (row) => row.clubName,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cardRole: "badge",
+      render: (row) => (
+        <StatusTag
+          status={row.status === "out" ? "out_of_stock" : row.status}
+          label={row.status === "ok" ? "OK" : undefined}
+        />
+      ),
+    },
+    {
+      key: "location",
+      header: "Location",
+      className: "text-muted-foreground",
+      render: (row) => row.branchName || "—",
+    },
+    { key: "flavour", header: "Flavour", render: (row) => row.flavourName },
+    {
+      key: "current",
+      header: "Current",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (row) => formatGrams(row.currentG),
+    },
+    {
+      key: "minimum",
+      header: "Minimum",
+      numeric: true,
+      className: "text-muted-foreground whitespace-nowrap",
+      render: (row) =>
+        row.minimumG == null ? "—" : formatGrams(row.minimumG),
+    },
+  ];
 
   const syncFailed = data.lastSyncStatus === "failed";
   const notConfigured = !data.configured;
@@ -153,18 +200,25 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
           { icon: CircleOff, tone: "destructive", value: data.kpis.outOfStock, label: "Out of Stock" },
           { icon: Clock, tone: "primary", value: data.kpis.approaching, label: "Approaching Limit" },
         ].map((kpi) => (
-          <div key={kpi.label} className="bg-card flex items-start gap-3 rounded-lg border p-4">
+          <div
+            key={kpi.label}
+            className="bg-card flex items-start gap-2.5 rounded-lg border p-3 sm:gap-3 sm:p-4"
+          >
             <span
               className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                "flex size-9 shrink-0 items-center justify-center rounded-lg",
                 TONE_CLASSES[kpi.tone],
               )}
             >
-              <kpi.icon className="size-5" />
+              <kpi.icon className="size-4.5" />
             </span>
-            <div>
-              <p className="font-qty text-lg leading-none">{kpi.value}</p>
-              <p className="text-muted-foreground mt-1 text-xs">{kpi.label}</p>
+            <div className="min-w-0 flex-1">
+              <p className="font-qty text-base leading-tight sm:text-lg">
+                {kpi.value}
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs leading-snug">
+                {kpi.label}
+              </p>
             </div>
           </div>
         ))}
@@ -209,58 +263,22 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
         </div>
       )}
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={Martini}
-          title="No club stock data available"
-          description={
-            notConfigured
-              ? "Connect the Club app to pull live club stock into this screen."
-              : "Nothing matches this filter, or the last sync returned no rows."
-          }
-        />
-      ) : (
-        <div className="bg-card overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40">
-              <tr className="text-muted-foreground border-b text-left text-xs">
-                <th className="px-4 py-2.5 font-medium">Club</th>
-                <th className="px-4 py-2.5 font-medium">Location</th>
-                <th className="px-4 py-2.5 font-medium">Flavour</th>
-                <th className="px-4 py-2.5 text-right font-medium">Current</th>
-                <th className="px-4 py-2.5 text-right font-medium">Minimum</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr
-                  key={`${row.clubId}-${row.flavourName}`}
-                  className="border-b last:border-0"
-                >
-                  <td className="px-4 py-2.5 font-medium">{row.clubName}</td>
-                  <td className="text-muted-foreground px-4 py-2.5">
-                    {row.branchName}
-                  </td>
-                  <td className="px-4 py-2.5">{row.flavourName}</td>
-                  <td className="font-qty px-4 py-2.5 text-right whitespace-nowrap">
-                    {formatGrams(row.currentG)}
-                  </td>
-                  <td className="font-qty text-muted-foreground px-4 py-2.5 text-right whitespace-nowrap">
-                    {row.minimumG == null ? "—" : formatGrams(row.minimumG)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <StatusTag
-                      status={row.status === "out" ? "out_of_stock" : row.status}
-                      label={row.status === "ok" ? "OK" : undefined}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        data={filtered}
+        getRowKey={(row) => `${row.clubId}-${row.flavourName}`}
+        emptyState={
+          <EmptyState
+            icon={Martini}
+            title="No club stock data available"
+            description={
+              notConfigured
+                ? "Connect the Club app to pull live club stock into this screen."
+                : "Nothing matches this filter, or the last sync returned no rows."
+            }
+          />
+        }
+      />
 
       <div className="text-muted-foreground flex items-center gap-2 rounded-md border p-3 text-xs">
         <Info className="size-4 shrink-0" />

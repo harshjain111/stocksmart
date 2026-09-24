@@ -211,9 +211,9 @@ function PartyCard({
       {expanded && (
         <div className="border-t p-3">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs">
+                <tr className="text-muted-foreground border-b text-left text-xs [&>th]:whitespace-nowrap">
                   <th className="py-1.5 pr-3 font-medium">Flavour</th>
                   <th className="py-1.5 pr-3 text-right font-medium">Taken</th>
                   <th className="py-1.5 pr-3 text-right font-medium">
@@ -470,9 +470,9 @@ function NewPartyForm({
 
       {lines.length > 0 && (
         <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/40">
-              <tr className="text-muted-foreground border-b text-left text-xs">
+              <tr className="text-muted-foreground border-b text-left text-xs [&>th]:whitespace-nowrap">
                 <th className="px-3 py-2 font-medium">Flavour</th>
                 <th className="px-3 py-2 text-right font-medium">Available</th>
                 <th className="px-3 py-2 text-right font-medium">Taking (kg)</th>

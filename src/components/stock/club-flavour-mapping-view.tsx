@@ -88,7 +88,7 @@ export function ClubFlavourMappingView({ data }: { data: MappingData }) {
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           { label: "Stored mapping", value: data.mappedCount },
           { label: "Matching by name only", value: data.suggestionCount },
@@ -183,9 +183,9 @@ export function ClubFlavourMappingView({ data }: { data: MappingData }) {
         />
       ) : (
         <div className="bg-card overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/40">
-              <tr className="text-muted-foreground border-b text-left text-xs">
+              <tr className="text-muted-foreground border-b text-left text-xs [&>th]:whitespace-nowrap">
                 <th className="px-4 py-2.5 font-medium">Club app flavour</th>
                 <th className="px-4 py-2.5 text-right font-medium">Stock</th>
                 <th className="px-4 py-2.5 text-right font-medium">Clubs</th>

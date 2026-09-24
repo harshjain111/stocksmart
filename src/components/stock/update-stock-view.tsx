@@ -263,9 +263,9 @@ export function UpdateStockView({
         />
       ) : (
         <div className="bg-card overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/40">
-              <tr className="text-muted-foreground border-b text-left text-xs">
+              <tr className="text-muted-foreground border-b text-left text-xs [&>th]:whitespace-nowrap">
                 <th className="px-4 py-2.5 font-medium">Flavour</th>
                 <th className="px-4 py-2.5 font-medium">Code</th>
                 <th className="px-4 py-2.5 text-right font-medium">

@@ -118,10 +118,14 @@ function KpiCard({
       <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", TONE_CLASSES[tone])}>
         <Icon className="size-5" />
       </span>
-      <div>
-        <p className="font-heading text-2xl leading-none font-semibold tabular-nums">{value}</p>
-        <p className="text-muted-foreground mt-1 text-xs">{label}</p>
-        {detail && <p className="text-muted-foreground text-xs">{detail}</p>}
+      <div className="min-w-0 flex-1">
+        <p className="font-heading text-xl leading-tight font-semibold tabular-nums sm:text-2xl">
+          {value}
+        </p>
+        <p className="text-muted-foreground mt-1 text-xs leading-snug">{label}</p>
+        {detail && (
+          <p className="text-muted-foreground text-xs leading-snug">{detail}</p>
+        )}
       </div>
     </div>
   );

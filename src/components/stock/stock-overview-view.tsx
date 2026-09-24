@@ -19,9 +19,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatGrams } from "@/lib/units";
+import { formatGrams, formatQtyCompact } from "@/lib/units";
 import { StatusTag } from "@/components/shared/status-tag";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "@/components/shared/data-table";
 import { Input } from "@/components/ui/input";
 import type { OverviewData, StockRow } from "@/lib/stock/overview";
 
@@ -47,20 +51,24 @@ function Kpi({
   detail?: string;
 }) {
   return (
-    <div className="bg-card flex items-start gap-3 rounded-lg border p-4">
+    <div className="bg-card flex items-start gap-2.5 rounded-lg border p-3 sm:gap-3 sm:p-4">
       <span
         className={cn(
-          "flex size-10 shrink-0 items-center justify-center rounded-lg",
+          "flex size-9 shrink-0 items-center justify-center rounded-lg",
           TONE_CLASSES[tone],
         )}
       >
-        <Icon className="size-5" />
+        <Icon className="size-4.5" />
       </span>
-      <div className="min-w-0">
-        <p className="font-qty text-lg leading-none">{value}</p>
-        <p className="text-muted-foreground mt-1 truncate text-xs">{label}</p>
+      <div className="min-w-0 flex-1">
+        <p className="font-qty text-base leading-tight break-words sm:text-lg">
+          {value}
+        </p>
+        <p className="text-muted-foreground mt-1 text-xs leading-snug">
+          {label}
+        </p>
         {detail && (
-          <p className="text-muted-foreground/80 mt-0.5 truncate text-[11px]">
+          <p className="text-muted-foreground/80 mt-0.5 text-[11px] leading-snug">
             {detail}
           </p>
         )}
@@ -121,32 +129,84 @@ export function StockOverviewView({ data }: { data: OverviewData }) {
       ? row.totalInternalG
       : (row.byLocation[locationId] ?? 0);
 
+  const columns: DataTableColumn<StockRow>[] = [
+    {
+      key: "name",
+      header: "Flavour",
+      cardRole: "title",
+      render: (row) => row.name,
+    },
+    {
+      key: "code",
+      header: "Code",
+      className: "text-muted-foreground",
+      render: (row) => row.code ?? "—",
+    },
+    // Location columns are always derived, never hardcoded (§9).
+    ...columnLocations.map((l) => ({
+      key: `loc-${l.id}`,
+      header: l.name,
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (row: StockRow) => formatGrams(row.byLocation[l.id] ?? 0),
+    })),
+    {
+      key: "total",
+      header: locationId === "all" ? "Total Internal" : "Total",
+      numeric: true,
+      className: "whitespace-nowrap font-medium",
+      render: (row) => formatGrams(totalFor(row)),
+    },
+    {
+      key: "club",
+      header: "Club Stock",
+      numeric: true,
+      className: "whitespace-nowrap",
+      render: (row) =>
+        row.clubStockG == null ? "—" : formatGrams(row.clubStockG),
+    },
+    {
+      key: "status",
+      header: "Club Status",
+      cardRole: "badge",
+      render: (row) =>
+        row.clubStatus ? (
+          <StatusTag
+            status={row.clubStatus === "out" ? "out_of_stock" : row.clubStatus}
+            label={row.clubStatus === "ok" ? "OK" : undefined}
+          />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <Kpi
           icon={Boxes}
           tone="primary"
-          value={formatGrams(kpis.totalInternalG)}
+          value={formatQtyCompact(kpis.totalInternalG)}
           label="Total Internal Stock"
           detail="Office + Godown"
         />
         <Kpi
           icon={Warehouse}
           tone="info"
-          value={formatGrams(kpis.godownG)}
+          value={formatQtyCompact(kpis.godownG)}
           label="Godown Stock"
         />
         <Kpi
           icon={Building2}
           tone="info"
-          value={formatGrams(kpis.officeG)}
+          value={formatQtyCompact(kpis.officeG)}
           label="Office Stock"
         />
         <Kpi
           icon={Martini}
           tone="success"
-          value={formatGrams(kpis.clubG)}
+          value={formatQtyCompact(kpis.clubG)}
           label="Club Stock"
           detail="from Club App"
         />
@@ -240,79 +300,18 @@ export function StockOverviewView({ data }: { data: OverviewData }) {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={Boxes}
-          title="No stock data available yet"
-          description="Stock appears here once opening stock is set, goods are received, or a batch is mixed."
-        />
-      ) : (
-        <div className="bg-card overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 sticky top-0">
-              <tr className="text-muted-foreground border-b text-left text-xs">
-                <th className="px-4 py-2.5 font-medium">Flavour</th>
-                <th className="px-4 py-2.5 font-medium">Code</th>
-                {columnLocations.map((l) => (
-                  <th
-                    key={l.id}
-                    className="px-4 py-2.5 text-right font-medium whitespace-nowrap"
-                  >
-                    {l.name}
-                  </th>
-                ))}
-                <th className="px-4 py-2.5 text-right font-medium">
-                  {locationId === "all" ? "Total Internal" : "Total"}
-                </th>
-                <th className="px-4 py-2.5 text-right font-medium">
-                  Club Stock
-                </th>
-                <th className="px-4 py-2.5 font-medium">Club Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr
-                  key={`${row.itemType}|${row.itemId}`}
-                  className="hover:bg-muted/30 border-b last:border-0"
-                >
-                  <td className="px-4 py-2.5 font-medium">{row.name}</td>
-                  <td className="text-muted-foreground px-4 py-2.5">
-                    {row.code ?? "—"}
-                  </td>
-                  {columnLocations.map((l) => (
-                    <td
-                      key={l.id}
-                      className="font-qty px-4 py-2.5 text-right whitespace-nowrap"
-                    >
-                      {formatGrams(row.byLocation[l.id] ?? 0)}
-                    </td>
-                  ))}
-                  <td className="font-qty px-4 py-2.5 text-right font-medium whitespace-nowrap">
-                    {formatGrams(totalFor(row))}
-                  </td>
-                  <td className="font-qty px-4 py-2.5 text-right whitespace-nowrap">
-                    {row.clubStockG == null ? "—" : formatGrams(row.clubStockG)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {row.clubStatus ? (
-                      <StatusTag
-                        status={
-                          row.clubStatus === "out"
-                            ? "out_of_stock"
-                            : row.clubStatus
-                        }
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        data={filtered}
+        getRowKey={(row) => `${row.itemType}|${row.itemId}`}
+        emptyState={
+          <EmptyState
+            icon={Boxes}
+            title="No stock data available yet"
+            description="Stock appears here once opening stock is set, goods are received, or a batch is mixed."
+          />
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
         <div className="bg-card rounded-lg border p-4">
