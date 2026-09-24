@@ -13,6 +13,8 @@ import {
   Info,
   Search,
   Martini,
+  ChevronRight,
+  ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatGrams } from "@/lib/units";
@@ -21,13 +23,9 @@ import { Input } from "@/components/ui/input";
 import { StatusTag } from "@/components/shared/status-tag";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
-  DataTable,
-  type DataTableColumn,
-} from "@/components/shared/data-table";
-import type { ClubStockRowView } from "@/app/(app)/stock/club/actions";
-import {
   triggerClubSync,
   type ClubStockData,
+  type ClubStockRowView,
 } from "@/app/(app)/stock/club/actions";
 
 const TONE_CLASSES: Record<string, string> = {
@@ -48,11 +46,24 @@ function fmtDateTime(iso: string | null): string {
   });
 }
 
+type ClubGroup = {
+  clubId: string;
+  clubName: string;
+  branchName: string;
+  rows: ClubStockRowView[];
+  out: number;
+  low: number;
+  approaching: number;
+  ok: number;
+};
+
 export function ClubStockView({ data }: { data: ClubStockData }) {
   const router = useRouter();
   const params = useSearchParams();
   const [status, setStatus] = React.useState(params.get("status") ?? "all");
+  const [clubId, setClubId] = React.useState("all");
   const [search, setSearch] = React.useState("");
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncMessage, setSyncMessage] = React.useState<string | null>(null);
 
@@ -60,13 +71,73 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
     const term = search.trim().toLowerCase();
     return data.rows.filter((r) => {
       if (status !== "all" && r.status !== status) return false;
+      if (clubId !== "all" && r.clubId !== clubId) return false;
       if (!term) return true;
       return (
         r.clubName.toLowerCase().includes(term) ||
         r.flavourName.toLowerCase().includes(term)
       );
     });
-  }, [data.rows, status, search]);
+  }, [data.rows, status, clubId, search]);
+
+  /**
+   * One row per club, not one per club-and-flavour. A flat list repeats
+   * the club name once for every flavour it stocks — sixteen clubs became
+   * a hundred-odd near-identical rows where only the last two columns
+   * changed. A club is the unit people actually ask about ("what is 188
+   * Downtown short of?"), so it is the unit on screen and its flavours
+   * live inside it.
+   */
+  const groups = React.useMemo<ClubGroup[]>(() => {
+    const byClub = new Map<string, ClubGroup>();
+    for (const row of filtered) {
+      let group = byClub.get(row.clubId);
+      if (!group) {
+        group = {
+          clubId: row.clubId,
+          clubName: row.clubName,
+          branchName: row.branchName,
+          rows: [],
+          out: 0,
+          low: 0,
+          approaching: 0,
+          ok: 0,
+        };
+        byClub.set(row.clubId, group);
+      }
+      group.rows.push(row);
+      group[row.status] += 1;
+    }
+    for (const group of byClub.values()) {
+      group.rows.sort((a, b) => a.flavourName.localeCompare(b.flavourName));
+    }
+
+    // Trouble first: this screen is opened to find who needs restocking,
+    // so a club that is fine should never sit above one that is empty.
+    return [...byClub.values()].sort(
+      (a, b) =>
+        b.out - a.out ||
+        b.low - a.low ||
+        b.approaching - a.approaching ||
+        a.clubName.localeCompare(b.clubName),
+    );
+  }, [filtered]);
+
+  // Narrowing to one club, or searching, means you want to see the
+  // matches — not to go opening each club by hand.
+  const autoExpand =
+    clubId !== "all" || search.trim() !== "" || status !== "all";
+  const isOpen = (id: string) => autoExpand || expanded.has(id);
+  const allOpen = groups.length > 0 && groups.every((g) => expanded.has(g.clubId));
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function handleSync() {
     setIsSyncing(true);
@@ -89,50 +160,16 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
     }
   }
 
-  const columns: DataTableColumn<ClubStockRowView>[] = [
-    {
-      key: "club",
-      header: "Club",
-      cardRole: "title",
-      render: (row) => row.clubName,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cardRole: "badge",
-      render: (row) => (
-        <StatusTag
-          status={row.status === "out" ? "out_of_stock" : row.status}
-          label={row.status === "ok" ? "OK" : undefined}
-        />
-      ),
-    },
-    {
-      key: "location",
-      header: "Location",
-      className: "text-muted-foreground",
-      render: (row) => row.branchName || "—",
-    },
-    { key: "flavour", header: "Flavour", render: (row) => row.flavourName },
-    {
-      key: "current",
-      header: "Current",
-      numeric: true,
-      className: "whitespace-nowrap",
-      render: (row) => formatGrams(row.currentG),
-    },
-    {
-      key: "minimum",
-      header: "Minimum",
-      numeric: true,
-      className: "text-muted-foreground whitespace-nowrap",
-      render: (row) =>
-        row.minimumG == null ? "—" : formatGrams(row.minimumG),
-    },
-  ];
-
   const syncFailed = data.lastSyncStatus === "failed";
   const notConfigured = !data.configured;
+
+  const clubOptions = React.useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const r of data.rows) seen.set(r.clubId, r.clubName);
+    return [...seen.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [data.rows]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -144,7 +181,7 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
             identify low-stock clubs.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-muted-foreground text-xs">
             Last synced: {fmtDateTime(data.lastSyncedAt)}
           </span>
@@ -163,10 +200,7 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
 
       {(notConfigured || syncFailed) && (
         <div
-          className={cn(
-            "flex items-start gap-2 rounded-md border p-3 text-sm",
-            "border-warning/40 bg-warning/15 text-warning-foreground",
-          )}
+          className="border-warning/40 bg-warning/15 text-warning-foreground flex items-start gap-2 rounded-md border p-3 text-sm"
           role="status"
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -179,7 +213,7 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
             <p className="mt-0.5">
               {notConfigured
                 ? "Set CLUB_APP_BASE_URL and CLUB_APP_API_KEY to connect the Club app. Figures below are whatever was last stored."
-                : data.lastSyncError ?? "The Club app could not be reached."}{" "}
+                : (data.lastSyncError ?? "The Club app could not be reached.")}{" "}
               {data.rows.length > 0 && (
                 <>
                   Showing last synced data from{" "}
@@ -188,6 +222,24 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
               )}
             </p>
           </div>
+        </div>
+      )}
+
+      {data.unmappedCount > 0 && (
+        <div className="border-warning/40 bg-warning/15 text-warning-foreground flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+          <Link2 className="size-4 shrink-0" />
+          <span className="flex-1">
+            {data.unmappedCount} Club app flavour
+            {data.unmappedCount === 1 ? "" : "s"}{" "}
+            {data.unmappedCount === 1 ? "has" : "have"} no stored mapping. Any
+            without a matching name are not shown below.
+          </span>
+          <Link
+            href="/stock/club/mapping"
+            className={buttonVariants({ size: "sm" })}
+          >
+            Map flavours
+          </Link>
         </div>
       )}
 
@@ -236,6 +288,19 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
           />
         </div>
         <select
+          aria-label="Club"
+          value={clubId}
+          onChange={(e) => setClubId(e.target.value)}
+          className="border-input bg-card h-9 max-w-52 rounded-md border px-3 text-sm"
+        >
+          <option value="all">All Clubs</option>
+          {clubOptions.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <select
           aria-label="Status"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -247,44 +312,240 @@ export function ClubStockView({ data }: { data: ClubStockData }) {
           <option value="out">Out of Stock</option>
           <option value="approaching">Approaching Limit</option>
         </select>
+        {!autoExpand && groups.length > 0 && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              setExpanded(
+                allOpen ? new Set() : new Set(groups.map((g) => g.clubId)),
+              )
+            }
+          >
+            <ChevronsUpDown /> {allOpen ? "Collapse all" : "Expand all"}
+          </Button>
+        )}
       </div>
 
-      {data.unmappedCount > 0 && (
-        <div className="border-warning/40 bg-warning/15 text-warning-foreground flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
-          <Link2 className="size-4 shrink-0" />
-          <span className="flex-1">
-            {data.unmappedCount} Club app flavour
-            {data.unmappedCount === 1 ? "" : "s"} {data.unmappedCount === 1 ? "has" : "have"}{" "}
-            no stored mapping. Any without a matching name are not shown below.
-          </span>
-          <Link href="/stock/club/mapping" className={buttonVariants({ size: "sm" })}>
-            Map flavours
-          </Link>
+      {groups.length === 0 ? (
+        <EmptyState
+          icon={Martini}
+          title="No club stock data available"
+          description={
+            notConfigured
+              ? "Connect the Club app to pull live club stock into this screen."
+              : "Nothing matches these filters, or the last sync returned no rows."
+          }
+        />
+      ) : (
+        <div className="grid gap-2">
+          {groups.map((group) => (
+            <ClubGroupCard
+              key={group.clubId}
+              group={group}
+              open={isOpen(group.clubId)}
+              // With a filter already narrowing things down there is
+              // nothing to collapse to, so the chevron would be dead.
+              collapsible={!autoExpand}
+              onToggle={() => toggle(group.clubId)}
+            />
+          ))}
         </div>
       )}
-
-      <DataTable
-        columns={columns}
-        data={filtered}
-        getRowKey={(row) => `${row.clubId}-${row.flavourName}`}
-        emptyState={
-          <EmptyState
-            icon={Martini}
-            title="No club stock data available"
-            description={
-              notConfigured
-                ? "Connect the Club app to pull live club stock into this screen."
-                : "Nothing matches this filter, or the last sync returned no rows."
-            }
-          />
-        }
-      />
 
       <div className="text-muted-foreground flex items-center gap-2 rounded-md border p-3 text-xs">
         <Info className="size-4 shrink-0" />
         Club stock is fetched from the Club app via API. It cannot be edited
         here.
       </div>
+    </div>
+  );
+}
+
+function CountChip({
+  count,
+  tone,
+  label,
+}: {
+  count: number;
+  tone: "destructive" | "warning" | "info" | "success";
+  label: string;
+}) {
+  if (count === 0) return null;
+  return (
+    <span
+      className={cn(
+        "rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        tone === "destructive" &&
+          "border-destructive/20 bg-destructive/10 text-destructive",
+        tone === "warning" &&
+          "border-warning/40 bg-warning/20 text-warning-foreground",
+        tone === "info" && "border-info/20 bg-info/10 text-info",
+        tone === "success" && "border-success/25 bg-success/15 text-success",
+      )}
+    >
+      {count} {label}
+    </span>
+  );
+}
+
+function ClubGroupCard({
+  group,
+  open,
+  collapsible,
+  onToggle,
+}: {
+  group: ClubGroup;
+  open: boolean;
+  collapsible: boolean;
+  onToggle: () => void;
+}) {
+  const header = (
+    <>
+      {collapsible && (
+        <ChevronRight
+          className={cn(
+            "text-muted-foreground size-4 shrink-0 transition-transform",
+            open && "rotate-90",
+          )}
+        />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{group.clubName}</p>
+        <p className="text-muted-foreground text-xs">
+          {group.branchName || "—"} · {group.rows.length} flavour
+          {group.rows.length === 1 ? "" : "s"}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <CountChip count={group.out} tone="destructive" label="out" />
+        <CountChip count={group.low} tone="warning" label="low" />
+        <CountChip count={group.approaching} tone="info" label="near min" />
+        <CountChip count={group.ok} tone="success" label="ok" />
+      </div>
+    </>
+  );
+
+  return (
+    <div className="bg-card rounded-lg border">
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="hover:bg-muted/30 flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
+        >
+          {header}
+        </button>
+      ) : (
+        <div className="flex w-full items-center gap-3 p-3">{header}</div>
+      )}
+
+      {open && (
+        <div className="border-t">
+          {/* The club name is deliberately absent from these rows — it is
+              the heading immediately above them. */}
+          <table className="hidden w-full text-sm min-[700px]:table">
+            <thead>
+              <tr className="text-muted-foreground border-b text-left text-xs [&>th]:whitespace-nowrap">
+                <th className="px-4 py-2 font-medium">Flavour</th>
+                <th className="px-4 py-2 text-right font-medium">Current</th>
+                <th className="px-4 py-2 text-right font-medium">Minimum</th>
+                <th className="px-4 py-2 text-right font-medium">Shortfall</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.rows.map((row) => {
+                const shortfall =
+                  row.minimumG == null
+                    ? null
+                    : Math.max(0, row.minimumG - row.currentG);
+                return (
+                  <tr
+                    key={`${row.clubId}-${row.flavourName}`}
+                    className="border-b last:border-0"
+                  >
+                    <td className="px-4 py-2">{row.flavourName}</td>
+                    <td className="font-qty px-4 py-2 text-right whitespace-nowrap">
+                      {formatGrams(row.currentG)}
+                    </td>
+                    <td className="font-qty text-muted-foreground px-4 py-2 text-right whitespace-nowrap">
+                      {row.minimumG == null ? "—" : formatGrams(row.minimumG)}
+                    </td>
+                    <td
+                      className={cn(
+                        "font-qty px-4 py-2 text-right whitespace-nowrap",
+                        shortfall
+                          ? "text-destructive"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {shortfall ? formatGrams(shortfall) : "—"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <StatusTag
+                        status={
+                          row.status === "out" ? "out_of_stock" : row.status
+                        }
+                        label={row.status === "ok" ? "OK" : undefined}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Narrow screens: a block per flavour, so nothing scrolls sideways. */}
+          <div className="divide-y min-[700px]:hidden">
+            {group.rows.map((row) => {
+              const shortfall =
+                row.minimumG == null
+                  ? null
+                  : Math.max(0, row.minimumG - row.currentG);
+              return (
+                <div
+                  key={`${row.clubId}-${row.flavourName}`}
+                  className="grid gap-1 p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
+                      {row.flavourName}
+                    </span>
+                    <StatusTag
+                      status={row.status === "out" ? "out_of_stock" : row.status}
+                      label={row.status === "ok" ? "OK" : undefined}
+                    />
+                  </div>
+                  <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                    <span>
+                      Current{" "}
+                      <span className="font-qty text-foreground">
+                        {formatGrams(row.currentG)}
+                      </span>
+                    </span>
+                    <span>
+                      Minimum{" "}
+                      <span className="font-qty">
+                        {row.minimumG == null ? "—" : formatGrams(row.minimumG)}
+                      </span>
+                    </span>
+                    {shortfall ? (
+                      <span className="text-destructive">
+                        Short by{" "}
+                        <span className="font-qty">
+                          {formatGrams(shortfall)}
+                        </span>
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
